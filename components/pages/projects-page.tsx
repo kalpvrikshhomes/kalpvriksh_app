@@ -2,10 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import { type Project, type Customer } from '@/lib/types'
-import { getProjects, saveProject, deleteProject, getCustomers, getMaterials } from '@/lib/storage'
+import { getProjects, saveProject, deleteProject, getCustomers, getMaterialIssuesForProject } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+
+import { ClipLoader } from 'react-spinners' // Assuming ClipLoader might be used or needed for loading states
+import { formatINR } from '@/hooks/use-currency-converter' // Keep formatINR as it's useful for displaying INR values
+
+interface ProjectDetails {
+  projectValue: number;
+  totalMaterialCost: number;
+  profit: number;
+}
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -18,6 +34,10 @@ export function ProjectsPage() {
     project_value: 0,
     status: 'pending' as const,
   })
+  const [selectedProjectDetails, setSelectedProjectDetails] = useState<ProjectDetails | null>(null)
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
+  
+  // Removed useCurrencyConverter hook and its related variables
 
   const fetchProjects = async () => {
     const projects = await getProjects()
@@ -66,6 +86,18 @@ export function ProjectsPage() {
     await fetchProjects()
   }
 
+  const handleViewDetails = async (project: Project) => {
+    const materialIssues = await getMaterialIssuesForProject(project.id);
+    const totalMaterialCost = materialIssues.reduce((acc, issue) => acc + (issue.quantity * issue.rate_at_issue), 0);
+    const profit = project.project_value - totalMaterialCost;
+    setSelectedProjectDetails({
+      projectValue: project.project_value,
+      totalMaterialCost,
+      profit
+    });
+    setIsDetailsDialogOpen(true);
+  }
+
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || 'Unknown'
 
   return (
@@ -99,7 +131,7 @@ export function ProjectsPage() {
               />
               <Input
                 type="number"
-                placeholder="Project Value"
+                placeholder="Project Value (INR)"
                 value={formData.project_value.toString()}
                 onChange={(e) => setFormData({ ...formData, project_value: parseFloat(e.target.value) || 0 })}
                 className="bg-input border-border text-foreground"
@@ -146,7 +178,7 @@ export function ProjectsPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-foreground">{project.name}</h3>
                   <p className="text-sm text-muted-foreground mt-1">Client: {getCustomerName(project.customer_id)}</p>
-                  <p className="text-sm text-muted-foreground mt-1">Value: ${project.project_value?.toFixed(2)}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Value: {formatINR(project.project_value)}</p>
                   <div className="mt-2 flex gap-4 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       project.status === 'completed' ? 'bg-green-900/30 text-green-200' :
@@ -158,6 +190,13 @@ export function ProjectsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewDetails(project)}
+                    >
+                      Details
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -182,6 +221,29 @@ export function ProjectsPage() {
           </Card>
         ))}
       </div>
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Project Financial Details</DialogTitle>
+          </DialogHeader>
+          {selectedProjectDetails && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold">Project Value</h4>
+                <p>{formatINR(selectedProjectDetails.projectValue)}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold">Total Material Cost</h4>
+                <p>{formatINR(selectedProjectDetails.totalMaterialCost)}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold">Profit</h4>
+                <p>{formatINR(selectedProjectDetails.profit)}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

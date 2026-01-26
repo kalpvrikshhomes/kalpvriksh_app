@@ -20,11 +20,11 @@
 -- DROP TABLE IF EXISTS public.inventory_history CASCADE;
 -- DROP TABLE IF EXISTS public.projects CASCADE; -- New projects table
 -- DROP TABLE IF EXISTS public.customers CASCADE;
--- DROP TABLE IF EXISTS public.products CASCADE;
+-- DROP TABLE IF EXISTS public.inventory CASCADE;
 -- DROP TABLE IF EXISTS public.profiles CASCADE;
 
 -- DROP FUNCTION IF EXISTS public.get_my_role() CASCADE;
--- DROP FUNCTION IF EXISTS public.update_product_quantity() CASCADE;
+-- DROP FUNCTION IF EXISTS public.update_inventory_quantity() CASCADE;
 -- DROP FUNCTION IF EXISTS public.log_material_issue_to_inventory() CASCADE;
 -- DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 -- DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users CASCADE;
@@ -46,10 +46,10 @@ COMMENT ON TABLE public.profiles IS 'Stores user-specific data like roles, linke
 COMMENT ON COLUMN public.profiles.role IS 'User role: ''admin'' or ''employee''';
 
 -- =================================================================
---  TABLE 2: PRODUCTS
---  Stores inventory of products/materials.
+--  TABLE 2: INVENTORY
+--  Stores inventory of materials.
 -- =================================================================
-CREATE TABLE IF NOT EXISTS public.products (
+CREATE TABLE IF NOT EXISTS public.inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   category TEXT,
@@ -59,9 +59,9 @@ CREATE TABLE IF NOT EXISTS public.products (
   image_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-COMMENT ON TABLE public.products IS 'Inventory of products and materials.';
-COMMENT ON COLUMN public.products.cost_price IS 'Cost price of the product, visible only to admins.';
-COMMENT ON COLUMN public.products.total_quantity IS 'Cached total quantity. Updated via triggers from inventory_history.';
+COMMENT ON TABLE public.inventory IS 'Inventory of materials.';
+COMMENT ON COLUMN public.inventory.cost_price IS 'Cost price of the inventory item, visible only to admins.';
+COMMENT ON COLUMN public.inventory.total_quantity IS 'Cached total quantity. Updated via triggers from inventory_history.';
 
 -- =================================================================
 --  TABLE 3: CUSTOMERS (Refactored - now purely customer info with email)
@@ -123,7 +123,7 @@ COMMENT ON COLUMN public.workers.trade IS 'The specific skill or trade of the wo
 -- =================================================================
 CREATE TABLE IF NOT EXISTS public.inventory_history (
   id BIGSERIAL PRIMARY KEY,
-  product_id UUID NOT NULL REFERENCES public.products(id),
+  inventory_item_id UUID NOT NULL REFERENCES public.inventory(id),
   quantity_change INT NOT NULL,
   reason TEXT NOT NULL CHECK (reason IN ('purchase', 'issued_to_project', 'correction', 'initial_stock')),
   related_project_id UUID REFERENCES public.projects(id), -- Changed from related_customer_id
@@ -140,7 +140,7 @@ COMMENT ON COLUMN public.inventory_history.quantity_change IS 'Positive for addi
 CREATE TABLE IF NOT EXISTS public.customer_material_issue (
   id BIGSERIAL PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES public.projects(id), -- Changed from customer_id
-  product_id UUID NOT NULL REFERENCES public.products(id),
+  inventory_item_id UUID NOT NULL REFERENCES public.inventory(id),
   quantity INT NOT NULL,
   rate_at_issue NUMERIC(10, 2) NOT NULL,
   issued_by UUID NOT NULL REFERENCES public.profiles(id),
@@ -209,10 +209,10 @@ COMMENT ON TABLE public.project_vendor_purchases IS 'Logs materials purchased di
 -- =================================================================
 --  INDEXES FOR PERFORMANCE
 -- =================================================================
-CREATE INDEX IF NOT EXISTS ON public.inventory_history (product_id);
+CREATE INDEX IF NOT EXISTS ON public.inventory_history (inventory_item_id);
 CREATE INDEX IF NOT EXISTS ON public.inventory_history (related_project_id);
 CREATE INDEX IF NOT EXISTS ON public.customer_material_issue (project_id);
-CREATE INDEX IF NOT EXISTS ON public.customer_material_issue (product_id);
+CREATE INDEX IF NOT EXISTS ON public.customer_material_issue (inventory_item_id);
 CREATE INDEX IF NOT EXISTS ON public.payments (worker_id);
 CREATE INDEX IF NOT EXISTS ON public.payments (vendor_id);
 CREATE INDEX IF NOT EXISTS ON public.payments (project_id);
@@ -229,16 +229,16 @@ RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid();
 $$;
 
--- Function to update product quantity from inventory history
-CREATE OR REPLACE FUNCTION public.update_product_quantity()
+-- Function to update inventory quantity from inventory history
+CREATE OR REPLACE FUNCTION public.update_inventory_quantity()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  UPDATE public.products
+  UPDATE public.inventory
   SET total_quantity = total_quantity + NEW.quantity_change
-  WHERE id = NEW.product_id;
+  WHERE id = NEW.inventory_item_id;
   RETURN NEW;
 END;
 $$;
@@ -246,8 +246,8 @@ $$;
 -- Trigger to call the function after a new history record
 CREATE TRIGGER IF NOT EXISTS on_inventory_history_insert
   AFTER INSERT ON public.inventory_history
-  FOR EACH ROW EXECUTE PROCEDURE public.update_product_quantity();
-COMMENT ON TRIGGER on_inventory_history_insert ON public.inventory_history IS 'Automatically updates the total_quantity in the products table.';
+  FOR EACH ROW EXECUTE PROCEDURE public.update_inventory_quantity();
+COMMENT ON TRIGGER on_inventory_history_insert ON public.inventory_history IS 'Automatically updates the total_quantity in the inventory table.';
 
 
 -- Function to create an inventory history record when material is issued
@@ -257,8 +257,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  INSERT INTO public.inventory_history (product_id, quantity_change, reason, related_project_id, created_by)
-  VALUES (NEW.product_id, -NEW.quantity, 'issued_to_project', NEW.project_id, NEW.issued_by);
+  RAISE NOTICE 'log_material_issue_to_inventory function called for project_id: %, inventory_item_id: %, quantity: %, issued_by: %', NEW.project_id, NEW.inventory_item_id, NEW.quantity, NEW.issued_by;
+  INSERT INTO public.inventory_history (inventory_item_id, quantity_change, reason, related_project_id, created_by)
+  VALUES (NEW.inventory_item_id, -NEW.quantity, 'issued_to_project', NEW.project_id, NEW.issued_by);
   RETURN NEW;
 END;
 $$;
@@ -297,10 +298,15 @@ CREATE POLICY IF NOT EXISTS "Users can see own profile" ON public.profiles FOR S
 CREATE POLICY IF NOT EXISTS "Admins can see all profiles" ON public.profiles FOR SELECT USING (public.get_my_role() = 'admin');
 CREATE POLICY IF NOT EXISTS "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- PRODUCTS RLS
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "All users can see products (except cost price)" ON public.products FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "Admins can do anything with products" ON public.products FOR ALL USING (public.get_my_role() = 'admin');
+-- INVENTORY RLS
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "All users can see inventory (except cost price)" ON public.inventory FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Admins can do anything with inventory" ON public.inventory FOR ALL USING (public.get_my_role() = 'admin');
+CREATE POLICY IF NOT EXISTS "Allow employees to update inventory via trigger"
+ON public.inventory
+FOR UPDATE
+USING (public.get_my_role() IN ('admin', 'employee'))
+WITH CHECK (public.get_my_role() IN ('admin', 'employee'));
 
 -- CUSTOMERS RLS
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
@@ -324,6 +330,10 @@ CREATE POLICY IF NOT EXISTS "Admins have full access to material issues" ON publ
 ALTER TABLE public.inventory_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Users see their own inventory history" ON public.inventory_history FOR SELECT USING (auth.uid() = created_by);
 CREATE POLICY IF NOT EXISTS "Admins see all inventory history" ON public.inventory_history FOR ALL USING (public.get_my_role() = 'admin');
+CREATE POLICY IF NOT EXISTS "Allow employees to insert into inventory_history via trigger"
+ON public.inventory_history
+FOR INSERT
+WITH CHECK (public.get_my_role() IN ('admin', 'employee'));
 
 -- PROJECT FINANCE RLS (Updated for project_id FK)
 ALTER TABLE public.project_finance ENABLE ROW LEVEL SECURITY;
@@ -350,4 +360,3 @@ ALTER TABLE public.project_vendor_purchases ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Employees can create vendor purchases" ON public.project_vendor_purchases FOR INSERT WITH CHECK (auth.uid() = purchased_by);
 CREATE POLICY IF NOT EXISTS "Users see vendor purchases they created" ON public.project_vendor_purchases FOR SELECT USING (auth.uid() = purchased_by);
 CREATE POLICY IF NOT EXISTS "Admins have full access to vendor purchases" ON public.project_vendor_purchases FOR ALL USING (public.get_my_role() = 'admin');
-

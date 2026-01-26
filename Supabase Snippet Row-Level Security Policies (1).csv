@@ -1,0 +1,76 @@
+table_name,column_name,data_type,is_nullable,column_default
+customer_material_issue,id,bigint,NO,nextval('customer_material_issue_id_seq'::regclass)
+customer_material_issue,project_id,uuid,NO,null
+customer_material_issue,inventory_item_id,uuid,NO,null
+customer_material_issue,quantity,integer,NO,null
+customer_material_issue,rate_at_issue,numeric,NO,null
+customer_material_issue,issued_by,uuid,NO,null
+customer_material_issue,issued_at,timestamp with time zone,YES,now()
+customers,id,uuid,NO,gen_random_uuid()
+customers,name,text,NO,null
+customers,phone,text,YES,null
+customers,address,text,YES,null
+customers,created_at,timestamp with time zone,YES,now()
+customers,email,text,YES,null
+inventory,id,uuid,NO,gen_random_uuid()
+inventory,name,text,NO,null
+inventory,category,text,YES,null
+inventory,unit,text,YES,null
+inventory,total_quantity,integer,NO,0
+inventory,cost_price,numeric,YES,null
+inventory,image_url,text,YES,null
+inventory,created_at,timestamp with time zone,YES,now()
+inventory_history,id,bigint,NO,nextval('inventory_history_id_seq'::regclass)
+inventory_history,inventory_item_id,uuid,NO,null
+inventory_history,quantity_change,integer,NO,null
+inventory_history,reason,text,NO,null
+inventory_history,related_project_id,uuid,YES,null
+inventory_history,created_by,uuid,NO,null
+inventory_history,created_at,timestamp with time zone,YES,now()
+payments,id,bigint,NO,nextval('payments_id_seq'::regclass)
+payments,payee_type,text,NO,null
+payments,worker_id,uuid,YES,null
+payments,vendor_id,uuid,YES,null
+payments,project_id,uuid,YES,null
+payments,amount,numeric,NO,null
+payments,notes,text,YES,null
+payments,payment_date,timestamp with time zone,YES,now()
+payments,paid_by,uuid,NO,null
+payments,created_at,timestamp with time zone,YES,now()
+profiles,id,uuid,NO,null
+profiles,role,text,NO,'employee'::text
+profiles,full_name,text,YES,null
+profiles,updated_at,timestamp with time zone,YES,now()
+project_finance,project_id,uuid,NO,null
+project_finance,total_material_cost,numeric,NO,null
+project_finance,project_value,numeric,NO,null
+project_finance,profit,numeric,NO,null
+project_finance,closed_at,timestamp with time zone,YES,now()
+project_finance,closed_by,uuid,YES,null
+project_vendor_purchases,id,bigint,NO,nextval('project_vendor_purchases_id_seq'::regclass)
+project_vendor_purchases,project_id,uuid,NO,null
+project_vendor_purchases,vendor_id,uuid,NO,null
+project_vendor_purchases,item_description,text,NO,null
+project_vendor_purchases,quantity,integer,NO,null
+project_vendor_purchases,unit,text,YES,null
+project_vendor_purchases,rate,numeric,NO,null
+project_vendor_purchases,total_amount,numeric,NO,null
+project_vendor_purchases,purchased_by,uuid,NO,null
+project_vendor_purchases,purchase_date,timestamp with time zone,YES,now()
+project_vendor_purchases,created_at,timestamp with time zone,YES,now()
+projects,id,uuid,NO,gen_random_uuid()
+projects,name,text,NO,null
+projects,customer_id,uuid,YES,null
+projects,status,text,NO,'pending'::text
+projects,created_at,timestamp with time zone,YES,now()
+projects,project_value,numeric,NO,0
+vendors,id,uuid,NO,gen_random_uuid()
+vendors,name,text,NO,null
+vendors,phone,text,YES,null
+vendors,address,text,YES,null
+vendors,created_at,timestamp with time zone,YES,now()
+workers,id,uuid,NO,gen_random_uuid()
+workers,name,text,NO,null
+workers,phone,text,YES,null
+workers,trade,text,YES,null
+workers,created_at,timestamp with time zone,YES,now()

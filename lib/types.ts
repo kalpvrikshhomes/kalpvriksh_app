@@ -43,6 +43,7 @@ export interface MaterialLog {
   id: string
   projectId: string
   materialId: string
+  materialName?: string // Added material name
   quantity: number
   usedBy: string
   timestamp: string

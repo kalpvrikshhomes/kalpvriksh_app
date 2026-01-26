@@ -25,21 +25,21 @@ interface MaterialIssuePageProps {
   user: User;
 }
 
-interface Customer {
+interface Project {
   id: string
   name: string
 }
 
-interface Product {
+interface InventoryItem {
   id: string
   name: string
 }
 
 export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [products, setProducts] = useState<Product[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState('')
-  const [selectedProduct, setSelectedProduct] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [selectedProject, setSelectedProject] = useState('')
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState('')
   const [quantity, setQuantity] = useState('')
   const [rate, setRate] = useState('')
 
@@ -51,21 +51,21 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
     const fetchData = async () => {
       setLoading(true)
       setError(null)
-      const [customersRes, productsRes] = await Promise.all([
-        supabase.from('customers').select('id, name'),
-        supabase.from('products').select('id, name'),
+      const [projectsRes, inventoryRes] = await Promise.all([
+        supabase.from('projects').select('id, name'),
+        supabase.from('inventory').select('id, name'),
       ])
 
-      if (customersRes.error) {
-        setError(customersRes.error.message)
-      } else if (customersRes.data) {
-        setCustomers(customersRes.data)
+      if (projectsRes.error) {
+        setError(projectsRes.error.message)
+      } else if (projectsRes.data) {
+        setProjects(projectsRes.data)
       }
 
-      if (productsRes.error) {
-        setError(productsRes.error.message)
-      } else if (productsRes.data) {
-        setProducts(productsRes.data)
+      if (inventoryRes.error) {
+        setError(inventoryRes.error.message)
+      } else if (inventoryRes.data) {
+        setInventoryItems(inventoryRes.data)
       }
       setLoading(false)
     }
@@ -74,7 +74,7 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
 
   const handleIssueMaterial = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedCustomer || !selectedProduct || !quantity || !rate) {
+    if (!selectedProject || !selectedInventoryItem || !quantity || !rate) {
       toast({
         title: 'Error',
         description: 'Please fill in all fields.',
@@ -83,20 +83,55 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
       return
     }
 
-    const { error } = await supabase.from('customer_material_issue').insert([
-      {
-        customer_id: selectedCustomer,
-        product_id: selectedProduct,
-        quantity: parseInt(quantity),
-        rate_at_issue: parseFloat(rate),
-        issued_by: user.id,
-      },
-    ])
+    const parsedQuantity = parseInt(quantity);
+    const parsedRate = parseFloat(rate);
+
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+      toast({
+        title: 'Error',
+        description: 'Quantity must be a positive number.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      toast({
+        title: 'Error',
+        description: 'Rate at Issue must be a non-negative number.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const issueData = {
+      project_id: selectedProject,
+      inventory_item_id: selectedInventoryItem,
+      quantity: parsedQuantity,
+      rate_at_issue: parsedRate,
+      issued_by: user.id,
+    }
+
+    console.log('Issuing material with data:', issueData)
+
+    const { data, error } = await supabase.from('customer_material_issue').insert(issueData).select()
+
+    console.log('Supabase response for customer_material_issue:', { data, error })
 
     if (error) {
+      console.error('Supabase error:', error);
+      let errorMessage = `Message: ${error.message}.`;
+      if (error.details) {
+        errorMessage += ` Details: ${error.details}`;
+      }
+
+      if (error.message.includes('Row Level Security') || (error.details && error.details.includes('policy'))) {
+        errorMessage += ' This might be due to Row Level Security policies. Please ensure you are authenticated and your user ID matches the "issued_by" field, or that you have appropriate admin privileges.';
+      }
+      
       toast({
         title: 'Error issuing material',
-        description: error.message,
+        description: errorMessage,
         variant: 'destructive',
       })
     } else {
@@ -104,8 +139,8 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
         title: 'Success',
         description: 'Material has been issued successfully.',
       })
-      setSelectedCustomer('')
-      setSelectedProduct('')
+      setSelectedProject('')
+      setSelectedInventoryItem('')
       setQuantity('')
       setRate('')
     }
@@ -123,28 +158,28 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
         <CardContent>
           <form onSubmit={handleIssueMaterial} className="space-y-6">
             <div className="space-y-2">
-              <Label>Project / Customer</Label>
-              <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+              <Label>Project</Label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a customer" />
+                  <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Product</Label>
-               <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+              <Label>Material</Label>
+               <Select value={selectedInventoryItem} onValueChange={setSelectedInventoryItem}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a product" />
+                  <SelectValue placeholder="Select a material" />
                 </SelectTrigger>
                 <SelectContent>
-                  {products.map((p) => (
+                  {inventoryItems.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
@@ -157,6 +192,7 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
                 <Input 
                     id="quantity"
                     type="number"
+                    min="1"
                     value={quantity}
                     onChange={e => setQuantity(e.target.value)}
                     placeholder="e.g., 10"
@@ -168,6 +204,7 @@ export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
                     id="rate"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={rate}
                     onChange={e => setRate(e.target.value)}
                     placeholder="e.g., 150.50"

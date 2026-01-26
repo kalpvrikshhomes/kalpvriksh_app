@@ -39,7 +39,7 @@ export function DashboardContent({ user, currentPage }: DashboardContentProps) {
       case 'payments':
         return <PaymentsPage user={user} />
       case 'logs':
-        return user.role === 'admin' ? <LogsPage /> : null
+        return <LogsPage />
       default:
         return <OverviewPage user={user} />
     }

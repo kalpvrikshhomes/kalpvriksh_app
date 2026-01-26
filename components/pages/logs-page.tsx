@@ -2,14 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { type MaterialLog } from '@/lib/types'
-import { getMaterialLogs } from '@/lib/storage'
+import { getInventoryHistory } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export function LogsPage() {
   const [logs, setLogs] = useState<MaterialLog[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLogs(getMaterialLogs())
+    async function fetchLogs() {
+      setLoading(true)
+      const history = await getInventoryHistory()
+      setLogs(history)
+      setLoading(false)
+    }
+    fetchLogs()
   }, [])
 
   return (
@@ -24,14 +31,16 @@ export function LogsPage() {
           <CardTitle className="text-foreground">Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          {logs.length === 0 ? (
+          {loading ? (
+            <p className="text-muted-foreground">Loading logs...</p>
+          ) : logs.length === 0 ? (
             <p className="text-muted-foreground">No material logs recorded yet.</p>
           ) : (
             <div className="space-y-3">
               {logs.map((log) => (
                 <div key={log.id} className="flex justify-between items-start p-3 border border-border rounded-md">
                   <div>
-                    <p className="text-sm font-medium text-foreground">Material ID: {log.materialId}</p>
+                    <p className="text-sm font-medium text-foreground">Material: {log.materialName || log.materialId}</p>
                     <p className="text-xs text-muted-foreground">Used by: {log.usedBy}</p>
                   </div>
                   <div className="text-right">

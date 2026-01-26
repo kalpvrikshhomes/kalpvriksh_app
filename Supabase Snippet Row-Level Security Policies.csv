@@ -1,0 +1,30 @@
+schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+public,profiles,Users can see own profile,PERMISSIVE,{public},SELECT,(auth.uid() = id),null
+public,profiles,Admins can see all profiles,PERMISSIVE,{public},SELECT,(get_my_role() = 'admin'::text),null
+public,profiles,Users can update own profile,PERMISSIVE,{public},UPDATE,(auth.uid() = id),null
+public,customers,All users can see customers,PERMISSIVE,{public},SELECT,true,null
+public,customers,Admins can do anything with customers,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,customer_material_issue,Employees can create material issues,PERMISSIVE,{public},INSERT,null,(auth.uid() = issued_by)
+public,customer_material_issue,Users see material issues they created,PERMISSIVE,{public},SELECT,(auth.uid() = issued_by),null
+public,customer_material_issue,Admins have full access to material issues,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,inventory_history,Users see their own inventory history,PERMISSIVE,{public},SELECT,(auth.uid() = created_by),null
+public,inventory_history,Admins see all inventory history,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,project_finance,Admins have full access to project finance,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,vendors,All users can see vendors,PERMISSIVE,{public},SELECT,true,null
+public,vendors,Admins can do anything with vendors,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,workers,All users can see workers,PERMISSIVE,{public},SELECT,true,null
+public,workers,Admins can do anything with workers,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,payments,Employees can create payments,PERMISSIVE,{public},INSERT,null,(auth.uid() = paid_by)
+public,payments,Users see payments they created,PERMISSIVE,{public},SELECT,(auth.uid() = paid_by),null
+public,payments,Admins have full access to payments,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,project_vendor_purchases,Employees can create vendor purchases,PERMISSIVE,{public},INSERT,null,(auth.uid() = purchased_by)
+public,project_vendor_purchases,Users see vendor purchases they created,PERMISSIVE,{public},SELECT,(auth.uid() = purchased_by),null
+public,project_vendor_purchases,Admins have full access to vendor purchases,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,customers,Employees can create customers,PERMISSIVE,{public},INSERT,null,(get_my_role() = 'employee'::text)
+public,projects,All users can see projects,PERMISSIVE,{public},SELECT,true,null
+public,projects,Employees can create projects,PERMISSIVE,{public},INSERT,null,(get_my_role() = 'employee'::text)
+public,projects,Admins can do anything with projects,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,inventory,All users can see inventory (except cost price),PERMISSIVE,{public},SELECT,true,null
+public,inventory,Admins can do anything with inventory,PERMISSIVE,{public},ALL,(get_my_role() = 'admin'::text),null
+public,inventory_history,Allow employees to insert into inventory_history via trigger,PERMISSIVE,{public},INSERT,null,"(get_my_role() = ANY (ARRAY['admin'::text, 'employee'::text]))"
+public,inventory,Allow employees to update inventory via trigger,PERMISSIVE,{public},UPDATE,"(get_my_role() = ANY (ARRAY['admin'::text, 'employee'::text]))","(get_my_role() = ANY (ARRAY['admin'::text, 'employee'::text]))"

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { type User, type Material, type Customer, type Project } from '@/lib/types'
-import { getMaterials, getCustomers, getProjects } from '@/lib/storage'
+import { getInventory, getCustomers, getProjects } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface OverviewPageProps {
@@ -15,7 +15,10 @@ export function OverviewPage({ user }: OverviewPageProps) {
   const [projects, setProjects] = useState<Project[]>([])
 
   useEffect(() => {
-    setMaterials(getMaterials()) // This remains synchronous
+    const fetchInventory = async () => {
+      const inventory = await getInventory()
+      setMaterials(inventory)
+    }
 
     const fetchCustomers = async () => {
       const customers = await getCustomers()
@@ -27,6 +30,7 @@ export function OverviewPage({ user }: OverviewPageProps) {
       setProjects(projects)
     }
 
+    fetchInventory()
     fetchCustomers()
     fetchProjects()
   }, [])

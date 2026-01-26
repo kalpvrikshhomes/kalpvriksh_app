@@ -123,3 +123,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom scrollbar for sidebar */
+.sidebar-nav-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-nav-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav-list::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+}
+
+.sidebar-nav-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+}

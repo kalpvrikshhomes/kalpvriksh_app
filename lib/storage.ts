@@ -1,26 +1,48 @@
 import { supabase } from '@/lib/supabase'
 import { type Material, type Customer, type Project, type MaterialLog } from './types'
 
-// Materials
-export function getMaterials(): Material[] {
-  const stored = localStorage.getItem('materials')
-  return stored ? JSON.parse(stored) : []
-}
-
-export function saveMaterial(material: Material): void {
-  const materials = getMaterials()
-  const index = materials.findIndex(m => m.id === material.id)
-  if (index >= 0) {
-    materials[index] = material
-  } else {
-    materials.push(material)
+// Inventory
+export async function getInventory(): Promise<Material[]> {
+  const { data, error } = await supabase.from('inventory').select('*')
+  if (error) {
+    console.error('Error fetching inventory:', error)
+    return []
   }
-  localStorage.setItem('materials', JSON.stringify(materials))
+  return data.map(item => ({
+    ...item,
+    quantity: item.total_quantity,
+    price: item.cost_price,
+  })) || []
 }
 
-export function deleteMaterial(id: string): void {
-  const materials = getMaterials().filter(m => m.id !== id)
-  localStorage.setItem('materials', JSON.stringify(materials))
+export async function saveInventory(inventoryItem: Omit<Material, 'id'> & { id?: string }): Promise<void> {
+  const { id, name, category, unit, quantity, price } = inventoryItem;
+  const item = {
+    name,
+    category,
+    unit,
+    total_quantity: quantity,
+    cost_price: price,
+  };
+
+  if (id) {
+    const { error } = await supabase.from('inventory').update(item).eq('id', id)
+    if (error) {
+      console.error('Error updating inventory item:', error)
+    }
+  } else {
+    const { error } = await supabase.from('inventory').insert(item)
+    if (error) {
+      console.error('Error inserting inventory item:', error)
+    }
+  }
+}
+
+export async function deleteInventory(id: string): Promise<void> {
+  const { error } = await supabase.from('inventory').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting inventory item:', error)
+  }
 }
 
 // Customers
@@ -85,36 +107,62 @@ export async function deleteProject(id: string): Promise<void> {
     }
 }
 
-// Material Logs
-export function getMaterialLogs(): MaterialLog[] {
-  const stored = localStorage.getItem('materialLogs')
-  return stored ? JSON.parse(stored) : []
+// Inventory History
+export async function getMaterialIssuesForProject(projectId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('customer_material_issue')
+    .select('*')
+    .eq('project_id', projectId);
+
+  if (error) {
+    console.error(`Error fetching material issues for project ${projectId}:`, error);
+    return [];
+  }
+  return data || [];
 }
 
-export function addMaterialLog(log: MaterialLog): void {
-  const logs = getMaterialLogs()
-  logs.push(log)
-  localStorage.setItem('materialLogs', JSON.stringify(logs))
+export async function getInventoryHistory(): Promise<MaterialLog[]> {
+    console.log('Fetching inventory history from Supabase...');
+    const { data, error } = await supabase.from('inventory_history').select(`
+      *,
+      profiles ( full_name ),
+      inventory ( name )
+    `);
+
+    console.log('Supabase response for inventory_history:', { data, error });
+
+    if (error) {
+        console.error('Error fetching inventory history:', error)
+        return []
+    }
+
+    if (!data) {
+        console.log('No data returned for inventory history.');
+        return [];
+    }
+    
+    console.log('Raw inventory history data:', data);
+
+    return data.map((log: any) => ({
+        id: log.id,
+        projectId: log.related_project_id,
+        materialId: log.inventory_item_id,
+        materialName: log.inventory?.name, // Extract the material name
+        quantity: log.quantity_change,
+        usedBy: log.profiles?.full_name ?? log.created_by,
+        timestamp: log.created_at,
+    })) || []
 }
 
-// Demo data
-export function initializeDemoData(): void {
-  if (localStorage.getItem('materials')) return
-
-  const demoMaterials: Material[] = [
-    { id: '1', name: 'Fabric - Beige Linen', quantity: 50, unit: 'meters', price: 25, category: 'Fabrics' },
-    { id: '2', name: 'Wood - Oak Plywood', quantity: 100, unit: 'sheets', price: 45, category: 'Wood' },
-    { id: '3', name: 'Paint - Charcoal Grey', quantity: 30, unit: 'liters', price: 35, category: 'Finishes' },
-    { id: '4', name: 'Leather - Cognac', quantity: 20, unit: 'meters', price: 120, category: 'Fabrics' },
-  ]
-
-  const demoCustomers: Customer[] = [
-    { id: '1', name: 'Sarah Mitchell', email: 'sarah@example.com', phone: '555-0101', address: '123 Park Ave' },
-    { id: '2', name: 'John Anderson', email: 'john@example.com', phone: '555-0102', address: '456 Oak St' },
-  ]
-
-  localStorage.setItem('materials', JSON.stringify(demoMaterials))
-  localStorage.setItem('customers', JSON.stringify(demoCustomers))
-  localStorage.setItem('projects', JSON.stringify([]))
-  localStorage.setItem('materialLogs', JSON.stringify([]))
+export async function addInventoryHistory(log: Omit<MaterialLog, 'id' | 'timestamp'>): Promise<void> {
+    const { error } = await supabase.from('inventory_history').insert({
+        inventory_item_id: log.materialId,
+        quantity_change: log.quantity,
+        reason: 'correction', // Or some other reason
+        related_project_id: log.projectId,
+        created_by: log.usedBy,
+    })
+    if (error) {
+        console.error('Error adding inventory history:', error)
+    }
 }

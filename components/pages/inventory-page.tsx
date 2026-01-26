@@ -2,15 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { type Material } from '@/lib/types'
-import { getMaterials, saveMaterial, deleteMaterial } from '@/lib/storage'
+import { getInventory, saveInventory, deleteInventory } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ClipLoader } from 'react-spinners'
+import { formatINR } from '@/hooks/use-currency-converter' // Keep formatINR as it's useful for displaying INR values
 
 export function InventoryPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  // Removed useCurrencyConverter hook and its related variables
   const [formData, setFormData] = useState({
     name: '',
     quantity: 0,
@@ -19,18 +24,32 @@ export function InventoryPage() {
     category: '',
   })
 
+  async function fetchInventory() {
+    setLoading(true)
+    const inventory = await getInventory()
+    setMaterials(inventory)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    setMaterials(getMaterials())
+    fetchInventory()
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const material: Material = {
-      id: editingId || Math.random().toString(36).substr(2, 9),
+    if (!formData.unit) {
+      // TODO: Add proper validation and user feedback
+      alert("Please select a unit.")
+      return
+    }
+    const material: Omit<Material, 'id'> & { id?: string } = {
       ...formData,
     }
-    saveMaterial(material)
-    setMaterials(getMaterials())
+    if (editingId) {
+      material.id = editingId
+    }
+    await saveInventory(material)
+    await fetchInventory()
     resetForm()
   }
 
@@ -41,14 +60,20 @@ export function InventoryPage() {
   }
 
   const handleEdit = (material: Material) => {
-    setFormData(material)
+    setFormData({
+      name: material.name,
+      quantity: material.quantity,
+      unit: material.unit,
+      price: material.price,
+      category: material.category,
+    })
     setEditingId(material.id)
     setShowForm(true)
   }
 
-  const handleDelete = (id: string) => {
-    deleteMaterial(id)
-    setMaterials(getMaterials())
+  const handleDelete = async (id: string) => {
+    await deleteInventory(id)
+    await fetchInventory()
   }
 
   return (
@@ -98,16 +123,22 @@ export function InventoryPage() {
                   className="bg-input border-border text-foreground"
                   required
                 />
-                <Input
-                  placeholder="Unit (m, sheets, liters)"
+                <Select
                   value={formData.unit}
-                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                  className="bg-input border-border text-foreground"
-                  required
-                />
+                  onValueChange={(value) => setFormData({ ...formData, unit: value })}
+                >
+                  <SelectTrigger className="bg-input border-border text-foreground">
+                    <SelectValue placeholder="Select a unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sheet">Sheet</SelectItem>
+                    <SelectItem value="sq ft">Sq Ft</SelectItem>
+                    <SelectItem value="piece">Piece</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Input
                   type="number"
-                  placeholder="Price"
+                  placeholder="Price (INR)"
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
                   className="bg-input border-border text-foreground"
@@ -127,43 +158,51 @@ export function InventoryPage() {
         </Card>
       )}
 
-      <div className="grid gap-4">
-        {materials.map((material) => (
-          <Card key={material.id} className="bg-card border-border">
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">{material.name}</h3>
-                  <p className="text-sm text-muted-foreground">{material.category}</p>
-                  <div className="mt-2 flex gap-4 text-sm">
-                    <span className="text-foreground">
-                      Qty: <span className={material.quantity < 20 ? 'text-destructive font-semibold' : 'text-foreground'}>{material.quantity}</span> {material.unit}
-                    </span>
-                    <span className="text-foreground">Price: ${material.price}</span>
-                  </div>
+      {loading ? (
+        <div className="flex justify-center">
+            <ClipLoader color="#ffffff" loading={loading} size={35} />
+        </div>
+      ) : (
+        <div className="grid gap-4">
+            {materials.map((material) => (
+            <Card key={material.id} className="bg-card border-border">
+                <CardContent className="pt-6">
+                <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                    <h3 className="font-semibold text-foreground">{material.name}</h3>
+                    <p className="text-sm text-muted-foreground">{material.category}</p>
+                    <div className="mt-2 flex gap-4 text-sm">
+                        <span className="text-foreground">
+                        Qty: <span className={material.quantity < 20 ? 'text-destructive font-semibold' : 'text-foreground'}>{material.quantity}</span> {material.unit}
+                        </span>
+                        <span className="text-foreground">
+                            Price: {formatINR(material.price)}
+                        </span>
+                    </div>
+                    </div>
+                    <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(material)}
+                    >
+                        Edit
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(material.id)}
+                    >
+                        Delete
+                    </Button>
+                    </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEdit(material)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(material.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardContent>
+            </Card>
+            ))}
+        </div>
+      )}
     </div>
   )
 }
