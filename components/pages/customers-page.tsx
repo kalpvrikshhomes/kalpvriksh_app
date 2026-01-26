@@ -59,7 +59,7 @@ export function CustomersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Customer Management</h1>
           <p className="text-muted-foreground mt-2">Manage your clients and contact information</p>
@@ -121,7 +121,7 @@ export function CustomersPage() {
         </Card>
       )}
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {customers.map((customer) => (
           <Card key={customer.id} className="bg-card border-border">
             <CardContent className="pt-6">

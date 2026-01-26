@@ -101,7 +101,7 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
         <CardHeader><CardTitle>Record a Payment</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handlePayment} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Payee Type</Label>
                 <Select value={payeeType} onValueChange={(value) => {
@@ -136,7 +136,7 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
 
             <div className="space-y-2">
               <Label htmlFor="amount">Amount</Label>
-              <Input id="amount" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 5000.00" required/>
+              <Input id="amount" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 5000.00 (INR)" required/>
             </div>
 
             <div className="space-y-2">

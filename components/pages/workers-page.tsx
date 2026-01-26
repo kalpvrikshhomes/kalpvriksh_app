@@ -45,6 +45,7 @@ export function WorkersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchWorkers()
@@ -62,21 +63,60 @@ export function WorkersPage() {
     setLoading(false)
   }
 
-  const handleAddWorker = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const { data, error } = await supabase
-      .from('workers')
-      .insert([newWorker])
-      .select()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      setWorkers([...workers, ...data])
-      setNewWorker({ name: '', phone: '', trade: '' })
-      setIsDialogOpen(false)
+    const workerData = {
+      name: newWorker.name,
+      phone: newWorker.phone || null,
+      trade: newWorker.trade || null,
+    };
+
+    if (editingId) {
+      // Update existing worker
+      const { error } = await supabase
+        .from('workers')
+        .update(workerData)
+        .eq('id', editingId);
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setWorkers(workers.map(w => w.id === editingId ? { ...w, ...workerData } : w));
+      }
+    } else {
+      // Add new worker
+      const { data, error } = await supabase
+        .from('workers')
+        .insert([workerData])
+        .select();
+
+      if (error) {
+        setError(error.message);
+      } else if (data && data.length > 0) {
+        setWorkers(prevWorkers => [...prevWorkers, data[0]]);
+      } else {
+        setError('Failed to add worker: No data returned after insert.');
+      }
     }
-  }
+
+    setLoading(false);
+    setNewWorker({ name: '', phone: '', trade: '' });
+    setEditingId(null);
+    setIsDialogOpen(false);
+  };
+
+  const handleEdit = (worker: Worker) => {
+    setNewWorker({
+      name: worker.name,
+      phone: worker.phone || '',
+      trade: worker.trade || '',
+    });
+    setEditingId(worker.id);
+    setIsDialogOpen(true); // Open the dialog for editing
+  };
 
   if (loading) {
     return <div>Loading...</div>
@@ -89,17 +129,26 @@ export function WorkersPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
           <CardTitle>Workers</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) { // When dialog closes, reset form and editing ID
+              setNewWorker({ name: '', phone: '', trade: '' });
+              setEditingId(null);
+            }
+          }}>
             <DialogTrigger asChild>
-              <Button>Add Worker</Button>
+              <Button onClick={() => {
+                  setNewWorker({ name: '', phone: '', trade: '' });
+                  setEditingId(null);
+              }}>Add Worker</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add a new worker</DialogTitle>
+                <DialogTitle>{editingId ? 'Edit Worker' : 'Add a new worker'}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleAddWorker} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="worker-name">Name</Label>
                   <Input
@@ -135,35 +184,49 @@ export function WorkersPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  Add Worker
+                  {editingId ? 'Save Changes' : 'Add Worker'}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Trade</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Created At</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workers.map((worker) => (
-                <TableRow key={worker.id}>
-                  <TableCell>{worker.name}</TableCell>
-                  <TableCell>{worker.trade}</TableCell>
-                  <TableCell>{worker.phone}</TableCell>
-                  <TableCell>
-                    {new Date(worker.created_at).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {workers.map((worker) => (
+              // Ensure worker.id is valid for key and other usage
+              <Card key={worker.id || `worker-${Math.random()}`} className="bg-card border-border">
+                <CardContent className="pt-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{worker.name || 'Unknown Worker'}</h3>
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        <p>🛠️ {worker.trade || 'N/A'}</p>
+                        <p>📞 {worker.phone || 'N/A'}</p>
+                        <p>📅 Added on: {worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(worker)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(worker.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

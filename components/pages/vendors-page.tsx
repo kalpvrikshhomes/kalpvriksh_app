@@ -45,6 +45,7 @@ export function VendorsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchVendors()
@@ -62,21 +63,60 @@ export function VendorsPage() {
     setLoading(false)
   }
 
-  const handleAddVendor = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const { data, error } = await supabase
-      .from('vendors')
-      .insert([newVendor])
-      .select()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      setVendors([...vendors, ...data])
-      setNewVendor({ name: '', phone: '', address: '' })
-      setIsDialogOpen(false)
+    const vendorData = {
+      name: newVendor.name,
+      phone: newVendor.phone || null,
+      address: newVendor.address || null,
+    };
+
+    if (editingId) {
+      // Update existing vendor
+      const { error } = await supabase
+        .from('vendors')
+        .update(vendorData)
+        .eq('id', editingId);
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setVendors(vendors.map(v => v.id === editingId ? { ...v, ...vendorData } : v));
+      }
+    } else {
+      // Add new vendor
+      const { data, error } = await supabase
+        .from('vendors')
+        .insert([vendorData])
+        .select();
+
+      if (error) {
+        setError(error.message);
+      } else if (data && data.length > 0) {
+        setVendors(prevVendors => [...prevVendors, data[0]]);
+      } else {
+        setError('Failed to add vendor: No data returned after insert.');
+      }
     }
-  }
+
+    setLoading(false);
+    setNewVendor({ name: '', phone: '', address: '' });
+    setEditingId(null);
+    setIsDialogOpen(false);
+  };
+
+  const handleEdit = (vendor: Vendor) => {
+    setNewVendor({
+      name: vendor.name,
+      phone: vendor.phone || '',
+      address: vendor.address || '',
+    });
+    setEditingId(vendor.id);
+    setIsDialogOpen(true); // Open the dialog for editing
+  };
 
   if (loading) {
     return <div>Loading...</div>
@@ -89,17 +129,26 @@ export function VendorsPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
           <CardTitle>Vendors</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) { // When dialog closes, reset form and editing ID
+              setNewVendor({ name: '', phone: '', address: '' });
+              setEditingId(null);
+            }
+          }}>
             <DialogTrigger asChild>
-              <Button>Add Vendor</Button>
+              <Button onClick={() => {
+                  setNewVendor({ name: '', phone: '', address: '' });
+                  setEditingId(null);
+              }}>Add Vendor</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add a new vendor</DialogTitle>
+                <DialogTitle>{editingId ? 'Edit Vendor' : 'Add a new vendor'}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleAddVendor} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="vendor-name">Name</Label>
                   <Input
@@ -135,35 +184,48 @@ export function VendorsPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  Add Vendor
+                  {editingId ? 'Save Changes' : 'Add Vendor'}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Created At</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vendors.map((vendor) => (
-                <TableRow key={vendor.id}>
-                  <TableCell>{vendor.name}</TableCell>
-                  <TableCell>{vendor.phone}</TableCell>
-                  <TableCell>{vendor.address}</TableCell>
-                  <TableCell>
-                    {new Date(vendor.created_at).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {vendors.map((vendor) => (
+              <Card key={vendor.id || `vendor-${Math.random()}`} className="bg-card border-border">
+                <CardContent className="pt-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{vendor.name || 'Unknown Vendor'}</h3>
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        <p>📞 {vendor.phone || 'N/A'}</p>
+                        <p>📍 {vendor.address || 'N/A'}</p>
+                        <p>📅 Added on: {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString() : 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(vendor)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(vendor.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

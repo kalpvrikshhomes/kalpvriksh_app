@@ -38,7 +38,7 @@ export function LogsPage() {
           ) : (
             <div className="space-y-3">
               {logs.map((log) => (
-                <div key={log.id} className="flex justify-between items-start p-3 border border-border rounded-md">
+                <div key={log.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-start p-3 border border-border rounded-md">
                   <div>
                     <p className="text-sm font-medium text-foreground">Material: {log.materialName || log.materialId}</p>
                     <p className="text-xs text-muted-foreground">Used by: {log.usedBy}</p>

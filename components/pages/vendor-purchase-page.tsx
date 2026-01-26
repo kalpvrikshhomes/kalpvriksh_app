@@ -134,7 +134,7 @@ export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
                 <Label htmlFor="item">Item Description</Label>
                 <Input id="item" value={itemDescription} onChange={e => setItemDescription(e.target.value)} placeholder="e.g., Plywood 18mm" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="quantity">Quantity</Label>
                     <Input id="quantity" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="e.g., 10" />

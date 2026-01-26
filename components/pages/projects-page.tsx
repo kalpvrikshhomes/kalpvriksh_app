@@ -102,7 +102,7 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Project Management</h1>
           <p className="text-muted-foreground mt-2">Track and manage interior design projects</p>
@@ -170,7 +170,7 @@ export function ProjectsPage() {
         </Card>
       )}
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map((project) => (
           <Card key={project.id} className="bg-card border-border">
             <CardContent className="pt-6">
@@ -189,7 +189,7 @@ export function ProjectsPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                       size="sm"
                       variant="outline"

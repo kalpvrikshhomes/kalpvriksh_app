@@ -78,7 +78,7 @@ export function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
           <p className="text-muted-foreground mt-2">Manage your materials and supplies</p>
@@ -98,7 +98,7 @@ export function InventoryPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   placeholder="Material name"
                   value={formData.name}
@@ -114,7 +114,7 @@ export function InventoryPage() {
                   required
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Input
                   type="number"
                   placeholder="Quantity"
@@ -163,7 +163,7 @@ export function InventoryPage() {
             <ClipLoader color="#ffffff" loading={loading} size={35} />
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {materials.map((material) => (
             <Card key={material.id} className="bg-card border-border">
                 <CardContent className="pt-6">
