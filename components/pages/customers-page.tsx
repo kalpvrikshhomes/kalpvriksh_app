@@ -1,13 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { type Customer } from '@/lib/types'
+import { type Customer, type User } from '@/lib/types'
 import { getCustomers, saveCustomer, deleteCustomer } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-export function CustomersPage() {
+interface DashboardPageProps {
+  user: User
+}
+
+export function CustomersPage({ user }: DashboardPageProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -125,7 +129,7 @@ export function CustomersPage() {
         {customers.map((customer) => (
           <Card key={customer.id} className="bg-card border-border">
             <CardContent className="pt-6">
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-start flex-wrap">
                 <div className="flex-1">
                   <h3 className="font-semibold text-foreground">{customer.name}</h3>
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -135,7 +139,7 @@ export function CustomersPage() {
                     <p>📅 Added on: {new Date(customer.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <Button
                     size="sm"
                     variant="outline"

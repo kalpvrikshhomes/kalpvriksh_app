@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -31,7 +32,6 @@ interface Vendor {
   id: string
   name: string
   phone: string | null
-  address: string | null
   created_at: string
 }
 
@@ -40,7 +40,6 @@ export function VendorsPage() {
   const [newVendor, setNewVendor] = useState({
     name: '',
     phone: '',
-    address: '',
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,7 +70,6 @@ export function VendorsPage() {
     const vendorData = {
       name: newVendor.name,
       phone: newVendor.phone || null,
-      address: newVendor.address || null,
     };
 
     if (editingId) {
@@ -84,7 +82,7 @@ export function VendorsPage() {
       if (error) {
         setError(error.message);
       } else {
-        setVendors(vendors.map(v => v.id === editingId ? { ...v, ...vendorData } : v));
+        setVendors(vendors.map(v => v.id === editingId ? { ...v, ...vendorData, created_at: v.created_at } : v));
       }
     } else {
       // Add new vendor
@@ -103,7 +101,7 @@ export function VendorsPage() {
     }
 
     setLoading(false);
-    setNewVendor({ name: '', phone: '', address: '' });
+    setNewVendor({ name: '', phone: '' });
     setEditingId(null);
     setIsDialogOpen(false);
   };
@@ -112,10 +110,21 @@ export function VendorsPage() {
     setNewVendor({
       name: vendor.name,
       phone: vendor.phone || '',
-      address: vendor.address || '',
     });
     setEditingId(vendor.id);
     setIsDialogOpen(true); // Open the dialog for editing
+  };
+
+  const handleDelete = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.from('vendors').delete().eq('id', id);
+    if (error) {
+      setError(error.message);
+    } else {
+      setVendors(vendors.filter(v => v.id !== id));
+    }
+    setLoading(false);
   };
 
   if (loading) {
@@ -134,19 +143,22 @@ export function VendorsPage() {
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) { // When dialog closes, reset form and editing ID
-              setNewVendor({ name: '', phone: '', address: '' });
+              setNewVendor({ name: '', phone: '' });
               setEditingId(null);
             }
           }}>
             <DialogTrigger asChild>
               <Button onClick={() => {
-                  setNewVendor({ name: '', phone: '', address: '' });
+                  setNewVendor({ name: '', phone: '' });
                   setEditingId(null);
               }}>Add Vendor</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingId ? 'Edit Vendor' : 'Add a new vendor'}</DialogTitle>
+                <DialogDescription>
+                  {editingId ? 'Edit the details of this vendor.' : 'Add a new vendor to your list.'}
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -172,17 +184,6 @@ export function VendorsPage() {
                     placeholder="Phone Number"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vendor-address">Address</Label>
-                  <Input
-                    id="vendor-address"
-                    value={newVendor.address}
-                    onChange={(e) =>
-                      setNewVendor({ ...newVendor, address: e.target.value })
-                    }
-                    placeholder="Address"
-                  />
-                </div>
                 <Button type="submit" className="w-full">
                   {editingId ? 'Save Changes' : 'Add Vendor'}
                 </Button>
@@ -200,7 +201,6 @@ export function VendorsPage() {
                       <h3 className="font-semibold text-foreground">{vendor.name || 'Unknown Vendor'}</h3>
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                         <p>📞 {vendor.phone || 'N/A'}</p>
-                        <p>📍 {vendor.address || 'N/A'}</p>
                         <p>📅 Added on: {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString() : 'N/A'}</p>
                       </div>
                     </div>

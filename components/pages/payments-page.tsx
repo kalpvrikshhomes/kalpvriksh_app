@@ -17,17 +17,17 @@ interface PaymentsPageProps {
 
 interface Worker { id: string; name: string; }
 interface Vendor { id: string; name: string; }
-interface Customer { id: string; name: string; }
+interface Project { id: string; name: string; } // Use Project type
 
 export function PaymentsPage({ user }: PaymentsPageProps) {
   const [payeeType, setPayeeType] = useState<'worker' | 'vendor' | ''>('');
   
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]); // Change to projects
 
   const [selectedPayeeId, setSelectedPayeeId] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(''); // Change to selectedProjectId
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -39,10 +39,10 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      const [workersRes, vendorsRes, customersRes] = await Promise.all([
+      const [workersRes, vendorsRes, projectsRes] = await Promise.all([ // Fetch projects
         supabase.from('workers').select('id, name'),
         supabase.from('vendors').select('id, name'),
-        supabase.from('customers').select('id, name'),
+        supabase.from('projects').select('id, name'), // Fetch projects
       ]);
 
       if (workersRes.error) setError(workersRes.error.message);
@@ -51,8 +51,8 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
       if (vendorsRes.error) setError(vendorsRes.error.message);
       else if (vendorsRes.data) setVendors(vendorsRes.data);
       
-      if (customersRes.error) setError(customersRes.error.message);
-      else if (customersRes.data) setCustomers(customersRes.data);
+      if (projectsRes.error) setError(projectsRes.error.message); // Check projectsRes
+      else if (projectsRes.data) setProjects(projectsRes.data); // Set projects
       
       setLoading(false);
     };
@@ -70,7 +70,7 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
       payee_type: payeeType,
       worker_id: payeeType === 'worker' ? selectedPayeeId : null,
       vendor_id: payeeType === 'vendor' ? selectedPayeeId : null,
-      customer_id: selectedCustomerId || null,
+      project_id: selectedProjectId || null, // Change to project_id
       amount: parseFloat(amount),
       notes,
       paid_by: user.id,
@@ -84,7 +84,7 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
       toast({ title: 'Success', description: 'Payment has been recorded successfully.' });
       setPayeeType('');
       setSelectedPayeeId('');
-      setSelectedCustomerId('');
+      setSelectedProjectId(''); // Reset selectedProjectId
       setAmount('');
       setNotes('');
     }
@@ -127,10 +127,10 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Project / Customer (Optional)</Label>
-              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
-                <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              <Label>Project (Optional)</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
+                <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 

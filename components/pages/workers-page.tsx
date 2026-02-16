@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -118,6 +119,18 @@ export function WorkersPage() {
     setIsDialogOpen(true); // Open the dialog for editing
   };
 
+  const handleDelete = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.from('workers').delete().eq('id', id);
+    if (error) {
+      setError(error.message);
+    } else {
+      setWorkers(workers.filter(w => w.id !== id));
+    }
+    setLoading(false);
+  };
+
   if (loading) {
     return <div>Loading...</div>
   }
@@ -147,6 +160,9 @@ export function WorkersPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingId ? 'Edit Worker' : 'Add a new worker'}</DialogTitle>
+                <DialogDescription>
+                  {editingId ? 'Edit the details of this worker.' : 'Add a new worker to your list.'}
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">

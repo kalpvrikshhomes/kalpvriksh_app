@@ -19,27 +19,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { type User } from '@/lib/types'
+import { type Project, type Vendor } from '@/lib/types'
 
-interface VendorPurchasePageProps {
-  user: User;
-}
-
-interface Customer {
-  id: string
-  name: string
-}
-
-interface Vendor {
-  id: string
-  name: string
-}
-
-export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
-  const [customers, setCustomers] = useState<Customer[]>([])
+export function VendorPurchasePage() {
+  const [projects, setProjects] = useState<Project[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
   
-  const [selectedCustomer, setSelectedCustomer] = useState('')
+  const [selectedProject, setSelectedProject] = useState('')
   const [selectedVendor, setSelectedVendor] = useState('')
   const [itemDescription, setItemDescription] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -56,16 +42,16 @@ export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
     const fetchData = async () => {
       setLoading(true)
       setError(null)
-      const [customersRes, vendorsRes] = await Promise.all([
-        supabase.from('customers').select('id, name'),
+      const [projectsRes, vendorsRes] = await Promise.all([
+        supabase.from('projects').select('id, name'),
         supabase.from('vendors').select('id, name'),
       ])
 
-      if (customersRes.error) setError(customersRes.error.message)
-      else if (customersRes.data) setCustomers(customersRes.data)
+      if (projectsRes.error) setError(projectsRes.error.message)
+      else if (projectsRes.data) setProjects(projectsRes.data as Project[])
 
       if (vendorsRes.error) setError(vendorsRes.error.message)
-      else if (vendorsRes.data) setVendors(vendorsRes.data)
+      else if (vendorsRes.data) setVendors(vendorsRes.data as Vendor[])
       
       setLoading(false)
     }
@@ -74,14 +60,20 @@ export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
 
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedCustomer || !selectedVendor || !itemDescription || !quantity || !rate) {
+    if (!selectedProject || !selectedVendor || !itemDescription || !quantity || !rate) {
       toast({ title: 'Error', description: 'Please fill in all fields.', variant: 'destructive' })
       return
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        toast({ title: 'Error', description: 'You must be logged in to perform this action.', variant: 'destructive' })
+        return;
+    }
+
     const { error } = await supabase.from('project_vendor_purchases').insert([
       {
-        customer_id: selectedCustomer,
+        project_id: selectedProject,
         vendor_id: selectedVendor,
         item_description: itemDescription,
         quantity: parseInt(quantity),
@@ -96,7 +88,7 @@ export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
       toast({ title: 'Error recording purchase', description: error.message, variant: 'destructive' })
     } else {
       toast({ title: 'Success', description: 'Vendor purchase has been recorded successfully.' })
-      setSelectedCustomer('')
+      setSelectedProject('')
       setSelectedVendor('')
       setItemDescription('')
       setQuantity('')
@@ -117,10 +109,10 @@ export function VendorPurchasePage({ user }: VendorPurchasePageProps) {
         <CardContent>
           <form onSubmit={handlePurchase} className="space-y-6">
             <div className="space-y-2">
-              <Label>Project / Customer</Label>
-              <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
-                <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              <Label>Project</Label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
+                <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">

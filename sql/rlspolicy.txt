@@ -1,0 +1,310 @@
+Alright, now we’re talking properly.
+You’ve done a LOT of things right, but there are some serious security + design leaks that will bite you later if not fixed now.
+
+I’ll do this in 3 parts:
+
+✅ What is GOOD (keep it)
+
+🚨 What is WRONG / risky (must fix)
+
+✅ A CLEAN, PRO version of how this should be done (concrete fixes, not theory)
+
+I’ll be blunt but precise.
+
+1️⃣ WHAT YOU DID RIGHT ✅
+✔ Central role-based helper function
+get_my_role()
+
+
+This is a good idea conceptually:
+
+Centralized
+
+Easy to reason about
+
+Cleaner policies
+
+✔ RLS enabled everywhere
+
+You didn’t miss tables. That’s rare. Good discipline.
+
+✔ Admin vs Employee separation
+
+You are thinking correctly:
+
+Admin = financial truth
+
+Employee = operational data only
+
+That mindset is 100% correct.
+
+2️⃣ WHAT IS WRONG / DANGEROUS 🚨
+❌ BIG PROBLEM #1: SECURITY DEFINER on get_my_role()
+
+This is the biggest red flag.
+
+SECURITY DEFINER
+
+Why this is dangerous
+
+This function bypasses RLS
+
+Any user can indirectly read profiles.role
+
+If later you add more logic → silent privilege escalation
+
+Supabase explicitly recommends avoiding SECURITY DEFINER for RLS helpers unless absolutely required.
+
+👉 You do NOT need it here
+
+✅ FIX
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS role_type
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$;
+
+
+NO plpgsql
+NO security definer
+NO exception handling needed
+
+If no row → returns NULL automatically.
+
+❌ BIG PROBLEM #2: Employees can read ALL profiles
+CREATE POLICY "Allow authenticated users to read all profiles"
+ON profiles FOR SELECT
+USING (auth.role() = 'authenticated');
+
+
+This means:
+
+Employees see who is admin
+
+Employees see everyone’s names
+
+Future fields (salary, designation) will leak
+
+🚫 This is not ERP-grade security
+
+✅ FIX
+
+Only admin sees all, user sees self.
+
+-- Admin can read all profiles
+CREATE POLICY "Admin read all profiles"
+ON profiles FOR SELECT
+USING (get_my_role() = 'admin');
+
+-- User can read own profile
+CREATE POLICY "User read own profile"
+ON profiles FOR SELECT
+USING (id = auth.uid());
+
+❌ BIG PROBLEM #3: Employees inserting INVENTORY ITEMS
+CREATE POLICY "Employees can insert new inventory items"
+ON inventory_items FOR INSERT
+WITH CHECK (get_my_role() = 'employee');
+
+
+This is very dangerous in real life.
+
+Why?
+
+Inventory = valuation
+
+Inventory = profit
+
+Inventory = audit-sensitive
+
+An employee should never create inventory masters.
+
+✅ FIX
+
+Only admin inserts inventory items.
+
+Employees:
+
+read stock
+
+issue material
+
+never create masters
+
+👉 REMOVE this policy
+
+❌ BIG PROBLEM #4: Employees can create vendors & workers
+Employees can read and create vendors
+Employees can read and create workers
+
+
+This causes:
+
+Duplicate vendors
+
+Fake workers
+
+Payment fraud risk
+
+✅ FIX
+
+Admin creates vendors/workers
+
+Employee only SELECT
+
+CREATE POLICY "Employee read vendors"
+ON vendors FOR SELECT
+USING (get_my_role() = 'employee');
+
+
+Same for workers.
+
+❌ BIG PROBLEM #5: Employees can read project_finance
+CREATE POLICY "Employees can read project finance"
+ON project_finance FOR SELECT
+USING (get_my_role() = 'employee');
+
+
+This directly violates what you yourself said:
+
+why me as admin show profit to employee dont you think
+
+You were right earlier. This policy is wrong.
+
+✅ FIX
+
+Employees must NEVER see:
+
+profit
+
+margin
+
+total cost
+
+👉 Remove employee access completely.
+
+3️⃣ THE PRO-CLEAN VERSION (WHAT YOU SHOULD DO)
+
+Below is how a production ERP would do it.
+
+🔐 ROLE FUNCTION (FIXED)
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS role_type
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$;
+
+👤 PROFILES
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin read all profiles"
+ON profiles FOR SELECT
+USING (get_my_role() = 'admin');
+
+CREATE POLICY "User read own profile"
+ON profiles FOR SELECT
+USING (id = auth.uid());
+
+CREATE POLICY "User update own profile"
+ON profiles FOR UPDATE
+USING (id = auth.uid())
+WITH CHECK (id = auth.uid());
+
+📦 INVENTORY (STRICT)
+ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin full inventory access"
+ON inventory_items FOR ALL
+USING (get_my_role() = 'admin')
+WITH CHECK (get_my_role() = 'admin');
+
+CREATE POLICY "Employee read inventory"
+ON inventory_items FOR SELECT
+USING (get_my_role() = 'employee');
+
+
+💡 Later: expose employee-safe inventory VIEW without cost_price.
+
+🏪 VENDORS / WORKERS (ADMIN-ONLY MASTER DATA)
+CREATE POLICY "Admin full vendors"
+ON vendors FOR ALL
+USING (get_my_role() = 'admin')
+WITH CHECK (get_my_role() = 'admin');
+
+CREATE POLICY "Employee read vendors"
+ON vendors FOR SELECT
+USING (get_my_role() = 'employee');
+
+
+Same pattern for workers.
+
+🚚 MATERIAL ISSUES (EMPLOYEE OPERATIONAL)
+CREATE POLICY "Employee issue material"
+ON material_issues FOR INSERT
+WITH CHECK (get_my_role() IN ('admin','employee'));
+
+CREATE POLICY "Employee read own issues"
+ON material_issues FOR SELECT
+USING (
+  get_my_role() = 'admin'
+  OR issued_by = auth.uid()
+);
+
+💰 PAYMENTS (ADMIN ONLY)
+CREATE POLICY "Admin only payments"
+ON worker_payments FOR ALL
+USING (get_my_role() = 'admin')
+WITH CHECK (get_my_role() = 'admin');
+
+
+Same for vendor/project payments.
+
+📊 PROJECT FINANCE (ABSOLUTE ADMIN ONLY)
+CREATE POLICY "Admin read project finance"
+ON project_finance FOR SELECT
+USING (get_my_role() = 'admin');
+
+
+🚫 No employee access
+🚫 No insert/update except triggers
+
+🧠 FINAL VERDICT
+Is your current script “usable”?
+
+👉 NO – it leaks authority
+
+Is your thinking correct?
+
+👉 YES – very much
+
+What you should do next
+
+Fix SECURITY DEFINER
+
+Remove employee insert on:
+
+inventory_items
+
+vendors
+
+workers
+
+Remove employee access to project_finance
+
+Use VIEWS for employee dashboards
+
+If you want, next I can:
+
+🔥 Rewrite your entire RLS file cleanly
+
+🧾 Design employee-safe views
+
+⚙️ Audit triggers for RLS bypass
+
+Just say: “Rewrite full RLS clean version”
+
+   

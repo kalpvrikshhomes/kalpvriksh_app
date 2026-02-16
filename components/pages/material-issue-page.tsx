@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -16,201 +17,359 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useToast } from '@/hooks/use-toast'
-import { type User } from '@/lib/types'
+import { toast } from 'sonner'
+import { type Project, type InventoryItem, type Vendor, type User } from '@/lib/types'
 
-interface MaterialIssuePageProps {
-  user: User;
+// Define a type for the issue mode
+type IssueMode = 'from_inventory' | 'direct_purchase'
+
+interface DashboardPageProps {
+  user: User
 }
 
-interface Project {
-  id: string
-  name: string
-}
-
-interface InventoryItem {
-  id: string
-  name: string
-}
-
-export function MaterialIssuePage({ user }: MaterialIssuePageProps) {
+export function MaterialIssuePage({ user }: DashboardPageProps) {
+  const [issueMode, setIssueMode] = useState<IssueMode>('from_inventory')
   const [projects, setProjects] = useState<Project[]>([])
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
-  const [selectedInventoryItem, setSelectedInventoryItem] = useState('')
-  const [quantity, setQuantity] = useState('')
-  const [rate, setRate] = useState('')
-
+  const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const { toast } = useToast()
+  const [submitting, setSubmitting] = useState(false)
+
+  // Form data for both modes
+  const [formData, setFormData] = useState({
+    projectId: '',
+    inventoryItemId: '',
+    quantity: '',
+    rate: '', // Used for rate_at_issue (from_inventory) or purchase rate (direct_purchase)
+    vendorId: '', // Only for direct_purchase
+    paymentStatus: '', // Only for direct_purchase
+  })
 
   useEffect(() => {
-    const fetchData = async () => {
+    async function fetchData() {
       setLoading(true)
-      setError(null)
-      const [projectsRes, inventoryRes] = await Promise.all([
-        supabase.from('projects').select('id, name'),
-        supabase.from('inventory').select('id, name'),
-      ])
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select('*')
+      const { data: vendorsData, error: vendorsError } = await supabase
+        .from('vendors')
+        .select('*')
 
-      if (projectsRes.error) {
-        setError(projectsRes.error.message)
-      } else if (projectsRes.data) {
-        setProjects(projectsRes.data)
+      if (projectsError) {
+        console.error('Error fetching projects:', projectsError)
+        toast.error('Error fetching projects.')
+      } else {
+        setProjects(projectsData || [])
       }
-
-      if (inventoryRes.error) {
-        setError(inventoryRes.error.message)
-      } else if (inventoryRes.data) {
-        setInventoryItems(inventoryRes.data)
+      if (inventoryError) {
+        console.error('Error fetching inventory items:', inventoryError)
+        toast.error('Error fetching inventory items.')
+      } else {
+        setInventoryItems(inventoryData || [])
+      }
+      if (vendorsError) {
+        console.error('Error fetching vendors:', vendorsError)
+        toast.error('Error fetching vendors.')
+      } else {
+        setVendors(vendorsData || [])
       }
       setLoading(false)
     }
+
     fetchData()
   }, [])
 
-  const handleIssueMaterial = async (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleSelectChange = (id: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedProject || !selectedInventoryItem || !quantity || !rate) {
-      toast({
-        title: 'Error',
-        description: 'Please fill in all fields.',
-        variant: 'destructive',
-      })
+    setSubmitting(true)
+
+    const { projectId, inventoryItemId, quantity, rate, vendorId, paymentStatus } = formData
+
+    if (!projectId || !inventoryItemId || !quantity || !rate) {
+      toast.error('Please fill in all required fields.')
+      setSubmitting(false)
       return
     }
 
-    const parsedQuantity = parseInt(quantity);
-    const parsedRate = parseFloat(rate);
-
-    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
-      toast({
-        title: 'Error',
-        description: 'Quantity must be a positive number.',
-        variant: 'destructive',
-      })
-      return
+    const payload: any = {
+      p_project_id: projectId,
+      p_issue_payload: {},
     }
 
-    if (isNaN(parsedRate) || parsedRate < 0) {
-      toast({
-        title: 'Error',
-        description: 'Rate at Issue must be a non-negative number.',
-        variant: 'destructive',
-      })
-      return
+    if (issueMode === 'from_inventory') {
+      payload.p_issue_payload = {
+        inventory_issues: [
+          {
+            inventory_item_id: inventoryItemId,
+            quantity: parseInt(quantity),
+            rate_at_issue: parseFloat(rate),
+          },
+        ],
+      }
+    } else {
+      if (!vendorId || !paymentStatus) {
+        toast.error('Please fill in all vendor purchase details.')
+        setSubmitting(false)
+        return
+      }
+      payload.p_issue_payload = {
+        vendor_purchases: [
+          {
+            inventory_item_id: inventoryItemId,
+            vendor_id: vendorId,
+            payment_status: paymentStatus,
+            quantity: parseInt(quantity),
+            rate: parseFloat(rate), // This is the purchase rate for direct purchase
+          },
+        ],
+      }
     }
 
-    const issueData = {
-      project_id: selectedProject,
-      inventory_item_id: selectedInventoryItem,
-      quantity: parsedQuantity,
-      rate_at_issue: parsedRate,
-      issued_by: user.id,
-    }
-
-    console.log('Issuing material with data:', issueData)
-
-    const { data, error } = await supabase.from('customer_material_issue').insert(issueData).select()
-
-    console.log('Supabase response for customer_material_issue:', { data, error })
+    const { data, error } = await supabase.rpc('issue_materials', payload)
 
     if (error) {
-      console.error('Supabase error:', error);
-      let errorMessage = `Message: ${error.message}.`;
-      if (error.details) {
-        errorMessage += ` Details: ${error.details}`;
-      }
-
-      if (error.message.includes('Row Level Security') || (error.details && error.details.includes('policy'))) {
-        errorMessage += ' This might be due to Row Level Security policies. Please ensure you are authenticated and your user ID matches the "issued_by" field, or that you have appropriate admin privileges.';
-      }
-      
-      toast({
-        title: 'Error issuing material',
-        description: errorMessage,
-        variant: 'destructive',
-      })
+      console.error('Error issuing materials:', error)
+      toast.error(error.message || 'Failed to issue materials.')
     } else {
-      toast({
-        title: 'Success',
-        description: 'Material has been issued successfully.',
+      toast.success('Materials issued successfully!')
+      // Reset form after successful submission
+      setFormData({
+        projectId: '',
+        inventoryItemId: '',
+        quantity: '',
+        rate: '',
+        vendorId: '',
+        paymentStatus: '',
       })
-      setSelectedProject('')
-      setSelectedInventoryItem('')
-      setQuantity('')
-      setRate('')
     }
+    setSubmitting(false)
   }
-  
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <p>Loading...</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <Card className="w-full max-w-2xl mx-auto">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Material Issue Management</h1>
+          <p className="text-muted-foreground mt-2">Issue materials to projects from inventory or directly from vendors</p>
+        </div>
+      </div>
+
+      <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle>Issue Material to Project</CardTitle>
+          <CardTitle className="text-foreground">Issue Materials</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleIssueMaterial} className="space-y-6">
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              {/* Project Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="projectId">Project</Label>
+                <Select
+                  value={formData.projectId}
+                  onValueChange={(value) => handleSelectChange('projectId', value)}
+                >
+                  <SelectTrigger className="bg-input border-border text-foreground">
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Issue Mode Selection */}
+              <div className="space-y-2">
+                <Label>Issue Mode</Label>
+                <div className="flex gap-4">
+                  <Button
+                    type="button"
+                    variant={issueMode === 'from_inventory' ? 'default' : 'outline'}
+                    onClick={() => setIssueMode('from_inventory')}
+                  >
+                    From Inventory
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={issueMode === 'direct_purchase' ? 'default' : 'outline'}
+                    onClick={() => {
+                      if (user.role === 'admin') {
+                        setIssueMode('direct_purchase')
+                      } else {
+                        toast.error('Only administrators can directly purchase and issue from vendors.')
+                        setIssueMode('from_inventory') // Revert to default if not admin
+                      }
+                    }}
+                    disabled={user.role !== 'admin'}
+                  >
+                    Direct Purchase from Vendor
+                  </Button>
+                </div>
+              </div>
+
+              {/* Conditional Fields based on Issue Mode */}
+              {issueMode === 'from_inventory' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="inventoryItemId">Material</Label>
+                    <Select
+                      value={formData.inventoryItemId}
+                      onValueChange={(value) => handleSelectChange('inventoryItemId', value)}
+                    >
+                      <SelectTrigger className="bg-input border-border text-foreground">
+                        <SelectValue placeholder="Select material from inventory" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventoryItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name} ({item.total_quantity} {item.unit})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      placeholder="Quantity"
+                      value={formData.quantity}
+                      onChange={handleChange}
+                      className="bg-input border-border text-foreground"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rate">Rate at Issue</Label>
+                    <Input
+                      id="rate"
+                      type="number"
+                      step="0.01"
+                      placeholder="Rate at which material is issued"
+                      value={formData.rate}
+                      onChange={handleChange}
+                      className="bg-input border-border text-foreground"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              {issueMode === 'direct_purchase' && user.role === 'admin' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="vendorId">Vendor</Label>
+                    <Select
+                      value={formData.vendorId}
+                      onValueChange={(value) => handleSelectChange('vendorId', value)}
+                    >
+                      <SelectTrigger className="bg-input border-border text-foreground">
+                        <SelectValue placeholder="Select a vendor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendors.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inventoryItemId">Material to Purchase</Label>
+                    <Select
+                      value={formData.inventoryItemId}
+                      onValueChange={(value) => handleSelectChange('inventoryItemId', value)}
+                    >
+                      <SelectTrigger className="bg-input border-border text-foreground">
+                        <SelectValue placeholder="Select material to purchase" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventoryItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity to Purchase</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      placeholder="Quantity"
+                      value={formData.quantity}
+                      onChange={handleChange}
+                      className="bg-input border-border text-foreground"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rate">Purchase Rate</Label>
+                    <Input
+                      id="rate"
+                      type="number"
+                      step="0.01"
+                      placeholder="Rate at which material is purchased"
+                      value={formData.rate}
+                      onChange={handleChange}
+                      className="bg-input border-border text-foreground"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paymentStatus">Payment Status</Label>
+                    <Select
+                      value={formData.paymentStatus}
+                      onValueChange={(value) => handleSelectChange('paymentStatus', value)}
+                    >
+                      <SelectTrigger className="bg-input border-border text-foreground">
+                        <SelectValue placeholder="Select payment status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                        <SelectItem value="partial">Partial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Material</Label>
-               <Select value={selectedInventoryItem} onValueChange={setSelectedInventoryItem}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a material" />
-                </SelectTrigger>
-                <SelectContent>
-                  {inventoryItems.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-             <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input 
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={e => setQuantity(e.target.value)}
-                    placeholder="e.g., 10"
-                />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="rate">Rate at Issue</Label>
-                <Input 
-                    id="rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={rate}
-                    onChange={e => setRate(e.target.value)}
-                    placeholder="e.g., 150.50"
-                />
-            </div>
-            <Button type="submit" className="w-full">Issue Material</Button>
+
+            <Button
+              type="submit"
+              className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+              disabled={submitting}
+            >
+              {submitting ? 'Issuing...' : 'Issue Material'}
+            </Button>
           </form>
         </CardContent>
       </Card>

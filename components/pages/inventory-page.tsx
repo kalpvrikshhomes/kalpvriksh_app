@@ -1,27 +1,38 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { type Material } from '@/lib/types'
+import { type Material, type User } from '@/lib/types'
 import { getInventory, saveInventory, deleteInventory } from '@/lib/storage'
+import { StockAdjustmentModal } from '@/components/stock-adjustment-modal'
+import { PurchaseToInventoryModal } from '@/components/purchase-to-inventory-modal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { ClipLoader } from 'react-spinners'
-import { formatINR } from '@/hooks/use-currency-converter' // Keep formatINR as it's useful for displaying INR values
+import { formatINR } from '@/hooks/use-currency-converter'
 
-export function InventoryPage() {
+interface DashboardPageProps {
+  user: User
+}
+
+export function InventoryPage({ user }: DashboardPageProps) {
   const [materials, setMaterials] = useState<Material[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  // Removed useCurrencyConverter hook and its related variables
+  const [isAdjustmentModalOpen, setAdjustmentModalOpen] = useState(false)
+  const [isPurchaseModalOpen, setPurchaseModalOpen] = useState(false)
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
+
   const [formData, setFormData] = useState({
     name: '',
     quantity: 0,
     unit: '',
     price: 0,
     category: '',
+    initial_quantity: 0,
   })
 
   async function fetchInventory() {
@@ -38,12 +49,16 @@ export function InventoryPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.unit) {
-      // TODO: Add proper validation and user feedback
       alert("Please select a unit.")
       return
     }
-    const material: Omit<Material, 'id'> & { id?: string } = {
-      ...formData,
+    const material: Omit<Material, 'id'> & { id?: string; initial_quantity?: number } = {
+      name: formData.name,
+      category: formData.category,
+      unit: formData.unit,
+      price: formData.price,
+      quantity: formData.quantity,
+      initial_quantity: formData.initial_quantity,
     }
     if (editingId) {
       material.id = editingId
@@ -54,7 +69,7 @@ export function InventoryPage() {
   }
 
   const resetForm = () => {
-    setFormData({ name: '', quantity: 0, unit: '', price: 0, category: '' })
+    setFormData({ name: '', quantity: 0, unit: '', price: 0, category: '', initial_quantity: 0 })
     setShowForm(false)
     setEditingId(null)
   }
@@ -66,6 +81,7 @@ export function InventoryPage() {
       unit: material.unit,
       price: material.price,
       category: material.category,
+      initial_quantity: 0, // Not used when editing
     })
     setEditingId(material.id)
     setShowForm(true)
@@ -76,19 +92,56 @@ export function InventoryPage() {
     await fetchInventory()
   }
 
+  const handleAdjustStock = (material: Material) => {
+    setSelectedMaterial(material)
+    setAdjustmentModalOpen(true)
+  }
+
   return (
     <div className="space-y-6">
+        <StockAdjustmentModal
+            open={isAdjustmentModalOpen}
+            onOpenChange={setAdjustmentModalOpen}
+            material={selectedMaterial}
+            onAdjusted={() => {
+                fetchInventory()
+                setSelectedMaterial(null)
+            }}
+        />
+        <PurchaseToInventoryModal
+            open={isPurchaseModalOpen}
+            onOpenChange={setPurchaseModalOpen}
+            materials={materials}
+            onPurchase={() => {
+                fetchInventory()
+            }}
+        />
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
           <p className="text-muted-foreground mt-2">Manage your materials and supplies</p>
         </div>
-        <Button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
-        >
-          {showForm ? 'Cancel' : '+ Add Material'}
-        </Button>
+        <div className="flex gap-2">
+            <Button
+              onClick={() => setPurchaseModalOpen(true)}
+              variant="outline"
+            >
+              + Purchase to Inventory
+            </Button>
+            <Button
+              onClick={() => {
+                if (!showForm) { // If form is currently hidden, we want to show it fresh for adding
+                  resetForm(); // Clear any previous edit state, including editingId
+                  setShowForm(true); // Show form for adding
+                } else { // If form is currently visible, clicking again means 'Cancel'
+                  resetForm(); // Clear everything and hide form
+                }
+              }}
+              className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+            >
+              {showForm ? 'Cancel' : '+ Add Material'}
+            </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -114,15 +167,7 @@ export function InventoryPage() {
                   required
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Input
-                  type="number"
-                  placeholder="Quantity"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                  className="bg-input border-border text-foreground"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
                   value={formData.unit}
                   onValueChange={(value) => setFormData({ ...formData, unit: value })}
@@ -132,7 +177,7 @@ export function InventoryPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sheet">Sheet</SelectItem>
-                    <SelectItem value="sq ft">Sq Ft</SelectItem>
+                    <SelectItem value="sq_ft">Sq Ft</SelectItem>
                     <SelectItem value="piece">Piece</SelectItem>
                   </SelectContent>
                 </Select>
@@ -145,6 +190,27 @@ export function InventoryPage() {
                   required
                 />
               </div>
+              {!editingId && (
+                <div className="space-y-2">
+                  <Label htmlFor="initial-quantity">Initial Quantity</Label>
+                  <Input
+                    id="initial-quantity"
+                    type="number"
+                    placeholder="0"
+                    value={formData.initial_quantity}
+                    onChange={(e) => setFormData({ ...formData, initial_quantity: Number(e.target.value) })}
+                    className="bg-input border-border text-foreground"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    This will create an initial stock record. Further changes should be made via "Adjust Stock".
+                  </p>
+                </div>
+              )}
+              {editingId && (
+                <p className="text-sm text-muted-foreground">
+                  To add or remove stock, please use the "Adjust Stock" button.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Button type="submit" className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90">
                   Save Material
@@ -180,13 +246,20 @@ export function InventoryPage() {
                         </span>
                     </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                     <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleEdit(material)}
                     >
-                        Edit
+                        Edit Details
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAdjustStock(material)}
+                    >
+                        Adjust Stock
                     </Button>
                     <Button
                         size="sm"

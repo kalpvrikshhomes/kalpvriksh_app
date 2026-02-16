@@ -1,0 +1,333 @@
+Perfect. UUID it is ✅
+Now I’ll give you a CLEAN, COMPLETE, FROM-SCRATCH DATABASE DESIGN exactly matching:
+
+your business flow
+
+advanced frontend (purchase + issue in one screen)
+
+strict inventory control
+
+automatic profit calculation
+
+admin-only cost control
+
+Supabase-safe, future-proof
+
+This is the canonical database.
+No legacy. No confusion. No hacks.
+
+🧨 00_reset.sql (FULL RESET – DEV ONLY)
+
+⚠️ RUN ONLY IF YOU WANT TO NUKE EVERYTHING
+
+-- Drop public schema objects safely
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  ) LOOP
+    EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
+  END LOOP;
+
+  FOR r IN (
+    SELECT typname FROM pg_type
+    JOIN pg_namespace n ON n.oid = pg_type.typnamespace
+    WHERE n.nspname = 'public'
+  ) LOOP
+    EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
+  END LOOP;
+END $$;
+
+🧩 01_enums.sql
+CREATE TYPE role_type AS ENUM ('admin', 'employee');
+
+CREATE TYPE unit_type AS ENUM ('sheet', 'sq_ft', 'piece');
+
+CREATE TYPE project_status AS ENUM (
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled'
+);
+
+CREATE TYPE inventory_reason AS ENUM (
+  'purchase',
+  'issued_to_project',
+  'correction',
+  'initial_stock'
+);
+
+CREATE TYPE payment_status AS ENUM (
+  'paid',
+  'credit',
+  'partial'
+);
+
+🏗️ 02_schema.sql (CORE TABLES)
+Profiles (Supabase Auth bridge)
+CREATE TABLE profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name text,
+  role role_type NOT NULL DEFAULT 'employee',
+  created_at timestamptz DEFAULT now()
+);
+
+Customers & Projects
+CREATE TABLE customers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  phone text,
+  address text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE projects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id uuid REFERENCES customers(id),
+  name text NOT NULL,
+  project_value numeric NOT NULL,
+  status project_status NOT NULL DEFAULT 'pending',
+  created_at timestamptz DEFAULT now()
+);
+
+Inventory
+CREATE TABLE inventory_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  category text,
+  unit unit_type NOT NULL,
+  cost_price numeric NOT NULL,
+  total_quantity integer NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+Vendors & Workers
+CREATE TABLE vendors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  phone text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE workers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  trade text,
+  phone text,
+  created_at timestamptz DEFAULT now()
+);
+
+Vendor Purchases (Inventory Source)
+CREATE TABLE vendor_purchases (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id uuid REFERENCES vendors(id),
+  payment_status payment_status NOT NULL,
+  total_amount numeric NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE vendor_purchase_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  purchase_id uuid REFERENCES vendor_purchases(id) ON DELETE CASCADE,
+  inventory_item_id uuid REFERENCES inventory_items(id),
+  quantity integer NOT NULL,
+  rate numeric NOT NULL
+);
+
+Inventory History (Audit Trail)
+CREATE TABLE inventory_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  inventory_item_id uuid REFERENCES inventory_items(id),
+  quantity_change integer NOT NULL,
+  reason inventory_reason NOT NULL,
+  related_project_id uuid REFERENCES projects(id),
+  created_by uuid REFERENCES profiles(id),
+  created_at timestamptz DEFAULT now()
+);
+
+Material Issue (ONLY inventory → project)
+CREATE TABLE material_issues (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid REFERENCES projects(id),
+  inventory_item_id uuid REFERENCES inventory_items(id),
+  quantity integer NOT NULL,
+  rate_at_issue numeric NOT NULL,
+  issued_by uuid REFERENCES profiles(id),
+  issued_at timestamptz DEFAULT now()
+);
+
+Payments
+CREATE TABLE worker_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  worker_id uuid REFERENCES workers(id),
+  project_id uuid REFERENCES projects(id),
+  amount numeric NOT NULL,
+  paid_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE project_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid REFERENCES projects(id),
+  amount numeric NOT NULL,
+  received_at timestamptz DEFAULT now()
+);
+
+Project Finance (LOCKED ON CLOSE)
+CREATE TABLE project_finance (
+  project_id uuid PRIMARY KEY REFERENCES projects(id),
+  material_cost numeric NOT NULL,
+  worker_cost numeric NOT NULL,
+  profit numeric NOT NULL,
+  closed_at timestamptz DEFAULT now()
+);
+
+⚙️ 03_functions.sql (AUTOMATION)
+Inventory update
+CREATE OR REPLACE FUNCTION update_inventory_quantity()
+RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE inventory_items
+  SET total_quantity = total_quantity + NEW.quantity_change
+  WHERE id = NEW.inventory_item_id
+    AND total_quantity + NEW.quantity_change >= 0;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Insufficient inventory stock';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+Material issue → inventory history
+CREATE OR REPLACE FUNCTION log_material_issue()
+RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO inventory_history (
+    inventory_item_id,
+    quantity_change,
+    reason,
+    related_project_id,
+    created_by
+  )
+  VALUES (
+    NEW.inventory_item_id,
+    -NEW.quantity,
+    'issued_to_project',
+    NEW.project_id,
+    NEW.issued_by
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+Close project → auto profit
+CREATE OR REPLACE FUNCTION close_project_finance()
+RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  material_cost numeric;
+  worker_cost numeric;
+BEGIN
+  SELECT SUM(quantity * rate_at_issue)
+  INTO material_cost
+  FROM material_issues
+  WHERE project_id = NEW.id;
+
+  SELECT SUM(amount)
+  INTO worker_cost
+  FROM worker_payments
+  WHERE project_id = NEW.id;
+
+  INSERT INTO project_finance (
+    project_id,
+    material_cost,
+    worker_cost,
+    profit
+  )
+  VALUES (
+    NEW.id,
+    COALESCE(material_cost,0),
+    COALESCE(worker_cost,0),
+    NEW.project_value - COALESCE(material_cost,0) - COALESCE(worker_cost,0)
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+🔁 04_triggers.sql
+CREATE TRIGGER trg_inventory_history
+AFTER INSERT ON inventory_history
+FOR EACH ROW
+EXECUTE FUNCTION update_inventory_quantity();
+
+CREATE TRIGGER trg_material_issue
+AFTER INSERT ON material_issues
+FOR EACH ROW
+EXECUTE FUNCTION log_material_issue();
+
+CREATE TRIGGER trg_project_close
+AFTER UPDATE OF status ON projects
+FOR EACH ROW
+WHEN (NEW.status = 'completed')
+EXECUTE FUNCTION close_project_finance();
+
+🔐 05_rls.sql (SIMPLIFIED & SAFE)
+ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE material_issues ENABLE ROW LEVEL SECURITY;
+
+-- Admin full access
+CREATE POLICY admin_all
+ON inventory_items
+FOR ALL
+USING (EXISTS (
+  SELECT 1 FROM profiles
+  WHERE id = auth.uid() AND role = 'admin'
+));
+
+-- Employees can read inventory but NOT update cost
+CREATE POLICY employee_read_inventory
+ON inventory_items
+FOR SELECT
+USING (auth.uid() IS NOT NULL);
+
+
+(We’ll extend this later cleanly.)
+
+🎯 FINAL RESULT (What You Now Have)
+
+✔ Clean ERP-grade database
+✔ Inventory = single source of truth
+✔ Vendor → Inventory → Project (always)
+✔ Advanced frontend supported safely
+✔ Automatic profit calculation
+✔ Admin-controlled cost price
+✔ UUID everywhere
+✔ No AI spaghetti
+
+Next (Recommended Order)
+
+1️⃣ Run reset (dev only)
+2️⃣ Enums
+3️⃣ Schema
+4️⃣ Functions
+5️⃣ Triggers
+6️⃣ RLS
+
+If you want, next I can:
+
+🎨 Map this to frontend screens
+
+🧠 Write Supabase RPC for “purchase + issue in one click”
+
+🔐 Finish full RLS
+
+📊 Build dashboard queries
+
+Just tell me what you want next.

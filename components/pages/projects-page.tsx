@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { type Project, type Customer } from '@/lib/types'
+import { type Project, type Customer, type User } from '@/lib/types'
 import { getProjects, saveProject, deleteProject, getCustomers, getMaterialIssuesForProject } from '@/lib/storage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog"
 
@@ -23,7 +24,11 @@ interface ProjectDetails {
   profit: number;
 }
 
-export function ProjectsPage() {
+interface DashboardPageProps {
+  user: User
+}
+
+export function ProjectsPage({ user }: DashboardPageProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -154,7 +159,7 @@ export function ProjectsPage() {
                 className="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground text-sm"
               >
                 <option value="pending">Pending</option>
-                <option value="in-progress">In Progress</option>
+                <option value="in_progress">In Progress</option>
                 <option value="completed">Completed</option>
               </select>
               <div className="flex gap-2">
@@ -225,6 +230,9 @@ export function ProjectsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Project Financial Details</DialogTitle>
+            <DialogDescription>
+              A summary of the project's value, material costs, and profit.
+            </DialogDescription>
           </DialogHeader>
           {selectedProjectDetails && (
             <div className="space-y-4">

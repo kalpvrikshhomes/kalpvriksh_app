@@ -48,3 +48,25 @@ export interface MaterialLog {
   usedBy: string
   timestamp: string
 }
+
+export interface InventoryItem {
+  id: string
+  name: string
+}
+
+export interface Vendor {
+    id: string;
+    name: string;
+}
+
+export interface IssueItem {
+    id: string;
+    inventory_item_id: string;
+    quantity: string;
+    rate: string;
+    unit: string;
+    is_vendor_purchase: boolean;
+    vendor_id: string;
+    item_description: string;
+    payment_status?: 'paid' | 'credit';
+}
