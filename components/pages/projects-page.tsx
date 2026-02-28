@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { dbFetch } from '@/lib/utils'
+import { dbFetch, getProxyImageUrl } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import Image from 'next/image'
 import { ClipLoader } from 'react-spinners'
@@ -409,7 +409,7 @@ export function ProjectsPage({ user }: DashboardPageProps) {
                 </div>
                 {publishFormData.existing_cover_image_path && !publishFormData.cover_image && (
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <div className="col-start-2 col-span-3"><Image src={publishFormData.existing_cover_image_path} alt="Current cover" width={128} height={128} className="rounded-md object-cover"/></div>
+                    <div className="col-start-2 col-span-3"><Image src={getProxyImageUrl(publishFormData.existing_cover_image_path)} alt="Current cover" width={128} height={128} className="rounded-md object-cover"/></div>
                   </div>
                 )}
               </div>
@@ -427,7 +427,7 @@ export function ProjectsPage({ user }: DashboardPageProps) {
                       <div className="grid grid-cols-3 gap-2">
                         {existingGalleryImages.map(img => (
                           <div key={img.id} className="relative group">
-                            <Image src={img.image_path} alt="Gallery image" width={100} height={100} className={`rounded-md object-cover ${imagesToDelete.includes(img.image_path) ? 'opacity-30' : ''}`}/>
+                            <Image src={getProxyImageUrl(img.image_path)} alt="Gallery image" width={100} height={100} className={`rounded-md object-cover ${imagesToDelete.includes(img.image_path) ? 'opacity-30' : ''}`}/>
                             <Button variant="destructive" size="icon" className={`absolute top-1 right-1 h-6 w-6 group-hover:opacity-100 ${imagesToDelete.includes(img.image_path) ? 'opacity-100' : 'opacity-0'}`} onClick={() => setImagesToDelete(prev => [...prev, img.image_path])}>X</Button>
                           </div>
                         ))}

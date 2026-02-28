@@ -5,6 +5,7 @@ import { LoginPage } from '@/components/login-page'
 import { Dashboard } from '@/components/dashboard'
 import { type User } from '@/lib/types'
 import { User as SupabaseUser } from '@supabase/supabase-js'
+import Image from 'next/image'
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
@@ -42,7 +43,12 @@ export default function Home() {
 
 
   if (loading) {
-    return <div className="flex items-center justify-center h-screen bg-background">Loading...</div>
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background gap-4">
+        <Image src="/logo.png" alt="Kalpvriksh Logo" width={200} height={56} className="h-16 w-auto animate-pulse" priority />
+        <div className="text-muted-foreground animate-pulse font-medium">Loading...</div>
+      </div>
+    )
   }
 
   return user ? (

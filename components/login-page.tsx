@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import Image from 'next/image'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -60,8 +61,10 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-sidebar flex items-center justify-center p-4">
       <Card className="w-full max-w-md border-sidebar-border">
-        <CardHeader className="space-y-1 text-center">
-          <div className="text-3xl font-bold text-sidebar-primary mb-2">Interior Manager</div>
+        <CardHeader className="space-y-4 text-center">
+          <div className="flex justify-center mb-2">
+            <Image src="/logo.png" alt="Kalpvriksh Logo" width={200} height={56} className="h-14 w-auto" priority />
+          </div>
           <CardTitle className="text-foreground">{isSignUp ? 'Create an account' : 'Welcome Back'}</CardTitle>
         </CardHeader>
         <CardContent>

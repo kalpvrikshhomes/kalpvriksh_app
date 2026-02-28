@@ -9,6 +9,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { Button } from '@/components/ui/button'
 import { Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 interface DashboardProps {
   user: User
@@ -56,7 +57,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       >
         <div className="p-4 sm:p-6 lg:p-8">
             {isMobile && (
-              <header className="flex items-center justify-between mb-4">
+              <header className="flex items-center justify-between mb-6">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -64,8 +65,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                 >
                   <Menu className="h-6 w-6" />
                 </Button>
-                <h1 className="text-xl font-bold text-center">Interior Manager</h1>
-                <div className="w-8"></div>
+                <div className="flex-1 flex justify-center">
+                  <Image src="/logo.png" alt="Kalpvriksh Logo" width={120} height={32} className="h-8 w-auto" priority />
+                </div>
+                <div className="w-10"></div>
               </header>
             )}
             <DashboardContent user={user} currentPage={currentPage} />

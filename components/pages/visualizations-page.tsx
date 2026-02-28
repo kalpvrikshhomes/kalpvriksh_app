@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { dbFetch } from '@/lib/utils'
+import { dbFetch, getProxyImageUrl } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input' 
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 
 type VisualizationCategory = {
@@ -22,6 +22,7 @@ type Visualization = {
 
 
 export function VisualizationsPage() {
+  const [mounted, setMounted] = useState(false)
   const [categories, setCategories] = useState<VisualizationCategory[]>([])
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
@@ -34,7 +35,7 @@ export function VisualizationsPage() {
     title: '',
     description: '',
     category_id: '',
-    image: null as File | null,
+    image: null as any,
   })
 
   const { toast } = useToast()
@@ -42,7 +43,7 @@ export function VisualizationsPage() {
   const fetchCategories = async () => {
     try {
       const data = await dbFetch('visualization_categories', 'select', {})
-      if (data) setCategories(data)
+      if (Array.isArray(data)) setCategories(data)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error fetching categories', description: error.message })
     }
@@ -51,16 +52,19 @@ export function VisualizationsPage() {
   const fetchVisualizations = async () => {
     try {
       const data = await dbFetch('visualizations', 'select', {})
-      if (data) setVisualizations(data)
+      if (Array.isArray(data)) setVisualizations(data)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error fetching visualizations', description: error.message })
     }
   }
 
   useEffect(() => {
+    setMounted(true)
     fetchCategories()
     fetchVisualizations()
   }, [])
+
+  if (!mounted) return null
 
   const handleVisualizationSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -329,7 +333,7 @@ export function VisualizationsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {visualizations.filter(v => v.category_id === category.id).map(vis => (
                     <div key={vis.id} className="border rounded-md p-2">
-                      <img src={vis.image_url} alt={vis.title} className="w-full h-40 object-cover rounded-md mb-2" />
+                      <img src={getProxyImageUrl(vis.image_url)} alt={vis.title} className="w-full h-40 object-cover rounded-md mb-2" />
                       <h4 className="font-semibold">{vis.title}</h4>
                       <p className="text-sm text-muted-foreground">{vis.description}</p>
                       <div className="flex gap-2 mt-2">

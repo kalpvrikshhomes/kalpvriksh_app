@@ -4,6 +4,7 @@ import { type User } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-react'
+import Image from 'next/image'
 
 interface DashboardNavProps {
   user: User
@@ -48,9 +49,16 @@ export function DashboardNav({
         )}
       >
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-sidebar-primary">Interior Manager</h1>
-            <p className="text-xs text-sidebar-foreground/60 mt-1">Inventory & Project Management</p>
+          <div className="flex flex-col items-start gap-1">
+             <Image 
+               src="/logo.png" 
+               alt="Kalpvriksh Logo" 
+               width={160} 
+               height={48} 
+               className="h-10 w-auto brightness-0 invert" 
+               priority 
+             />
+             <p className="text-[10px] text-sidebar-foreground/60 uppercase tracking-widest font-medium">Inventory & Projects</p>
           </div>
           {isMobile && (
             <Button
