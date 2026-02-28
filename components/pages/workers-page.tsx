@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbFetch } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -55,11 +55,13 @@ export function WorkersPage() {
   const fetchWorkers = async () => {
     setLoading(true)
     setError(null)
-    const { data, error } = await supabase.from('workers').select('*')
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      setWorkers(data)
+    try {
+      const data = await dbFetch('workers', 'select', {})
+      if (data) {
+        setWorkers(data)
+      }
+    } catch (err: any) {
+      setError(err.message)
     }
     setLoading(false)
   }
@@ -75,32 +77,25 @@ export function WorkersPage() {
       trade: newWorker.trade || null,
     };
 
-    if (editingId) {
-      // Update existing worker
-      const { error } = await supabase
-        .from('workers')
-        .update(workerData)
-        .eq('id', editingId);
-
-      if (error) {
-        setError(error.message);
-      } else {
+    try {
+      if (editingId) {
+        // Update existing worker
+        await dbFetch('workers', 'update', {
+          values: workerData,
+          eq: { id: editingId }
+        });
         setWorkers(workers.map(w => w.id === editingId ? { ...w, ...workerData } : w));
-      }
-    } else {
-      // Add new worker
-      const { data, error } = await supabase
-        .from('workers')
-        .insert([workerData])
-        .select();
-
-      if (error) {
-        setError(error.message);
-      } else if (data && data.length > 0) {
-        setWorkers(prevWorkers => [...prevWorkers, data[0]]);
       } else {
-        setError('Failed to add worker: No data returned after insert.');
+        // Add new worker
+        const data = await dbFetch('workers', 'insert', [workerData]);
+        if (data && data.length > 0) {
+          setWorkers(prevWorkers => [...prevWorkers, data[0]]);
+        } else {
+          setError('Failed to add worker: No data returned after insert.');
+        }
       }
+    } catch (err: any) {
+      setError(err.message);
     }
 
     setLoading(false);
@@ -122,11 +117,11 @@ export function WorkersPage() {
   const handleDelete = async (id: string) => {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.from('workers').delete().eq('id', id);
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await dbFetch('workers', 'delete', { eq: { id } });
       setWorkers(workers.filter(w => w.id !== id));
+    } catch (err: any) {
+      setError(err.message);
     }
     setLoading(false);
   };

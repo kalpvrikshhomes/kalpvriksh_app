@@ -1,18 +1,21 @@
-import { supabase } from '@/lib/supabase'
+
 import { type Material, type Customer, type Project, type MaterialLog } from './types'
+import { dbFetch } from './utils'
 
 // Inventory
 export async function getInventory(): Promise<Material[]> {
-  const { data, error } = await supabase.from('inventory_items').select('*')
-  if (error) {
+  try {
+    const data = await dbFetch('inventory_items', 'select', {})
+    if (!data) return []
+    return data.map((item: any) => ({
+      ...item,
+      quantity: item.total_quantity,
+      price: item.cost_price,
+    })) || []
+  } catch (error) {
     console.error('Error fetching inventory:', error)
     return []
   }
-  return data.map(item => ({
-    ...item,
-    quantity: item.total_quantity,
-    price: item.cost_price,
-  })) || []
 }
 
 export async function getOrCreateInventoryItem(
@@ -20,41 +23,37 @@ export async function getOrCreateInventoryItem(
     unit: string,
     rate: number
 ): Promise<string> {
-    // First, try to find the item by name.
-    const { data: existingItem, error: selectError } = await supabase
-        .from('inventory_items')
-        .select('id')
-        .eq('name', itemName)
-        .single();
+    try {
+        // First, try to find the item by name.
+        const existingItem = await dbFetch('inventory_items', 'select', {
+          eq: { name: itemName },
+          single: true
+        })
 
-    if (selectError && selectError.code !== 'PGRST116') { // PGRST116: "object not found"
-        console.error('Error searching for inventory item:', selectError);
-        throw selectError;
-    }
-
-    if (existingItem) {
-        return existingItem.id;
+        if (existingItem) {
+            return existingItem.id;
+        }
+    } catch (selectError: any) {
+        if (selectError.message !== 'PGRST116' && !selectError.message.includes('JSON')) { 
+            console.error('Error searching for inventory item:', selectError);
+            throw selectError;
+        }
     }
 
     // If it doesn't exist, create it.
-    const { data: newItem, error: insertError } = await supabase
-        .from('inventory_items')
-        .insert({
-            name: itemName,
-            unit: unit,
-            cost_price: rate,
-            total_quantity: 0, // Starts with 0, will be updated by triggers
-            category: 'Uncategorized', // Default category
-        })
-        .select('id')
-        .single();
+    const newItem = await dbFetch('inventory_items', 'insert', {
+        name: itemName,
+        unit: unit,
+        cost_price: rate,
+        total_quantity: 0,
+        category: 'Uncategorized',
+    })
 
-    if (insertError) {
-        console.error('Error creating new inventory item:', insertError);
-        throw insertError;
+    if (!newItem || !newItem[0]) {
+        throw new Error('Error creating new inventory item');
     }
 
-    return newItem.id;
+    return newItem[0].id;
 }
 
 
@@ -69,11 +68,10 @@ export async function saveInventory(inventoryItem: Omit<Material, 'id'> & { id?:
         unit,
         cost_price: price,
       };
-      const { error } = await supabase.from('inventory_items').update(itemToUpdate).eq('id', id);
-      if (error) {
-        console.error('Error updating inventory item:', error);
-        throw error;
-      }
+      await dbFetch('inventory_items', 'update', {
+        values: itemToUpdate,
+        eq: { id }
+      })
     } else {
       // When inserting, create the item first with 0 quantity.
       const itemToInsert = {
@@ -83,18 +81,16 @@ export async function saveInventory(inventoryItem: Omit<Material, 'id'> & { id?:
         cost_price: price,
         total_quantity: 0,
       };
-      const { data: newItem, error } = await supabase.from('inventory_items').insert(itemToInsert).select('id').single();
+      const newItem = await dbFetch('inventory_items', 'insert', itemToInsert)
       
-      if (error) {
-        console.error('Error inserting inventory item:', error);
-        throw error;
+      if (!newItem || !newItem[0]) {
+        throw new Error('Error inserting inventory item');
       }
 
       // If there's an initial quantity, create a history record for it.
-      // The trigger on the history table will then update the item's total_quantity.
-      if (newItem && initial_quantity && initial_quantity > 0) {
+      if (initial_quantity && initial_quantity > 0) {
         await addInventoryHistory({
-          materialId: newItem.id,
+          materialId: newItem[0].id,
           quantity: initial_quantity,
           reason: 'initial_stock',
         });
@@ -103,71 +99,83 @@ export async function saveInventory(inventoryItem: Omit<Material, 'id'> & { id?:
   }
 
 export async function deleteInventory(id: string): Promise<void> {
-  const { error } = await supabase.from('inventory_items').delete().eq('id', id)
-  if (error) {
+  try {
+    await dbFetch('inventory_items', 'delete', { eq: { id } })
+  } catch (error) {
     console.error('Error deleting inventory item:', error)
   }
 }
 
 // Customers
-export async function getCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase.from('customers').select('*')
-  if (error) {
+export async function getCustomers(nameFilter?: string, addressFilter?: string): Promise<Customer[]> {
+  try {
+    const data = await dbFetch('customers', 'select', {
+      ilike: {
+        ...(nameFilter && { name: `%${nameFilter}%` }),
+        ...(addressFilter && { address: `%${addressFilter}%` }),
+      }
+    })
+    return data || []
+  } catch (error) {
     console.error('Error fetching customers:', error)
     return []
   }
-  return data || []
 }
 
 export async function saveCustomer(customer: Omit<Customer, 'id'> & { id?: string }): Promise<void> {
-  if (customer.id) {
-    const { error } = await supabase.from('customers').update(customer).eq('id', customer.id)
-    if (error) {
-      console.error('Error updating customer:', error)
+  try {
+    if (customer.id) {
+      await dbFetch('customers', 'update', {
+        values: customer,
+        eq: { id: customer.id }
+      })
+    } else {
+      await dbFetch('customers', 'insert', customer)
     }
-  } else {
-    const { error } = await supabase.from('customers').insert(customer)
-    if (error) {
-      console.error('Error inserting customer:', error)
-    }
+  } catch (error) {
+    console.error('Error saving customer:', error)
   }
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  const { error } = await supabase.from('customers').delete().eq('id', id)
-  if (error) {
+  try {
+    await dbFetch('customers', 'delete', { eq: { id } })
+  } catch (error) {
     console.error('Error deleting customer:', error)
   }
 }
 
 // Projects
 export async function getProjects(): Promise<Project[]> {
-  const { data, error } = await supabase.from('projects').select('*')
-  if (error) {
+  try {
+    const data = await dbFetch('projects', 'select', {})
+    return data || []
+  } catch (error) {
     console.error('Error fetching projects:', error)
     return []
   }
-  return data || []
 }
 
 export async function saveProject(project: Omit<Project, 'id' | 'materials'> & { id?: string }): Promise<void> {
-  if (project.id) {
-    const { error } = await supabase.from('projects').update(project).eq('id', project.id)
-    if (error) {
-      console.error('Error updating project:', error)
+  try {
+    if (project.id) {
+      await dbFetch('projects', 'update', {
+        values: project,
+        eq: { id: project.id }
+      })
+    } else {
+      await dbFetch('projects', 'insert', project)
     }
-  } else {
-    const { error } = await supabase.from('projects').insert(project)
-    if (error) {
-      console.error('Error inserting project:', error)
-    }
+  } catch (error) {
+    console.error('Error saving project:', error)
   }
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const { error } = await supabase.from('projects').delete().eq('id', id)
-  if (error) {
-      console.error('Error deleting project:', JSON.stringify(error, null, 2))
+  try {
+    await dbFetch('projects', 'delete', { eq: { id } })
+  } catch (error) {
+      console.error('Error deleting project:', error)
     }
 }
 
@@ -179,8 +187,9 @@ export async function addCustomerMaterialIssue(issue: {
     rate_at_issue: number,
     issued_by: string,
 }): Promise<void> {
-    const { error } = await supabase.from('customer_material_issue').insert(issue);
-    if (error) {
+    try {
+        await dbFetch('customer_material_issue', 'insert', issue);
+    } catch (error) {
         console.error('Error adding customer material issue:', error);
         throw error;
     }
@@ -188,49 +197,30 @@ export async function addCustomerMaterialIssue(issue: {
 
 // Inventory History
 export async function getMaterialIssuesForProject(projectId: string): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('customer_material_issue')
-    .select('*')
-    .eq('project_id', projectId);
-
-  if (error) {
+  try {
+    const data = await dbFetch('customer_material_issue', 'select', {
+      eq: { project_id: projectId }
+    })
+    return data || [];
+  } catch (error) {
     console.error(`Error fetching material issues for project ${projectId}:`, error);
     return [];
   }
-  return data || [];
 }
 
 export async function getInventoryHistory(): Promise<MaterialLog[]> {
-    console.log('Fetching inventory history from Supabase...');
-    const { data, error } = await supabase.from('inventory_history').select(`
-      *,
-      profiles ( full_name ),
-      inventory_items ( name )
-    `);
-
-    console.log('Supabase response for inventory_history:', { data, error });
-
-    if (error) {
+    try {
+        // Special case for complex select with joins
+        // We'll handle this in the generic API route by adding more options or creating a specific route
+        // For now, let's keep it simple or create a dedicated route for history
+        const response = await fetch('/api/db/inventory-history', { method: 'GET' })
+        const res = await response.json()
+        if (res.error) throw new Error(res.error)
+        return res.data || []
+    } catch (error) {
         console.error('Error fetching inventory history:', error)
         return []
     }
-
-    if (!data) {
-        console.log('No data returned for inventory history.');
-        return [];
-    }
-    
-    console.log('Raw inventory history data:', data);
-
-    return data.map((log: any) => ({
-        id: log.id,
-        projectId: log.related_project_id,
-        materialId: log.inventory_item_id,
-        materialName: log.inventory_items?.name, // Extract the material name
-        quantity: log.quantity_change,
-        usedBy: log.profiles?.full_name ?? log.created_by,
-        timestamp: log.created_at,
-    })) || []
 }
 
 export async function addInventoryHistory(log: {
@@ -239,21 +229,22 @@ export async function addInventoryHistory(log: {
     reason: 'purchase' | 'issued_to_project' | 'correction' | 'initial_stock';
     projectId?: string | null;
 }): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        console.error('No user logged in to perform this action.');
-        throw new Error('Authentication required.');
-    }
+    try {
+        // First get current user
+        const sessionRes = await fetch('/api/session')
+        const { user } = await sessionRes.json()
+        if (!user) {
+            throw new Error('Authentication required.');
+        }
 
-    const { error } = await supabase.from('inventory_history').insert({
-        inventory_item_id: log.materialId,
-        quantity_change: log.quantity,
-        reason: log.reason,
-        related_project_id: log.projectId,
-        created_by: user.id,
-    });
-
-    if (error) {
+        await dbFetch('inventory_history', 'insert', {
+            inventory_item_id: log.materialId,
+            quantity_change: log.quantity,
+            reason: log.reason,
+            related_project_id: log.projectId,
+            created_by: user.id,
+        })
+    } catch (error) {
         console.error('Error adding inventory history:', error);
         throw error;
     }
@@ -267,42 +258,34 @@ export async function recordPurchase(purchase: {
     quantity: number;
     rate: number;
 }): Promise<void> {
-    // 1. Create the main vendor purchase record
-    const { data: purchaseRecord, error: purchaseError } = await supabase
-        .from('vendor_purchases')
-        .insert({
+    try {
+        // 1. Create the main vendor purchase record
+        const purchaseRecord = await dbFetch('vendor_purchases', 'insert', {
             vendor_id: purchase.vendorId,
             payment_status: purchase.paymentStatus,
             total_amount: purchase.totalAmount,
         })
-        .select('id')
-        .single();
 
-    if (purchaseError) {
-        console.error('Error creating vendor purchase:', purchaseError);
-        throw purchaseError;
-    }
+        if (!purchaseRecord || !purchaseRecord[0]) {
+            throw new Error('Error creating vendor purchase');
+        }
 
-    // 2. Create the purchase line item
-    const { error: itemError } = await supabase
-        .from('vendor_purchase_items')
-        .insert({
-            purchase_id: purchaseRecord.id,
+        // 2. Create the purchase line item
+        await dbFetch('vendor_purchase_items', 'insert', {
+            purchase_id: purchaseRecord[0].id,
             inventory_item_id: purchase.itemId,
             quantity: purchase.quantity,
             rate: purchase.rate,
         });
 
-    if (itemError) {
-        console.error('Error creating vendor purchase item:', itemError);
-        // Here you might want to delete the purchaseRecord you just created for consistency
-        throw itemError;
+        // 3. Create the inventory history record to update stock
+        await addInventoryHistory({
+            materialId: purchase.itemId,
+            quantity: purchase.quantity,
+            reason: 'purchase',
+        });
+    } catch (error) {
+        console.error('Error recording purchase:', error);
+        throw error;
     }
-
-    // 3. Create the inventory history record to update stock
-    await addInventoryHistory({
-        materialId: purchase.itemId,
-        quantity: purchase.quantity,
-        reason: 'purchase',
-    });
 }

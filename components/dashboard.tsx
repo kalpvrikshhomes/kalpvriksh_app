@@ -16,7 +16,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
-  const [currentPage, setCurrentPage] = useState<'overview' | 'inventory' | 'customers' | 'projects' | 'logs'>('overview')
+  const [currentPage, setCurrentPage] = useState<'overview' | 'inventory' | 'customers' | 'projects' | 'visualizations' | 'logs'>('overview')
   const isMobile = useIsMobile()
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile)
 

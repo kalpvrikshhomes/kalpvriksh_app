@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbFetch } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -42,17 +42,17 @@ export function VendorPurchasePage() {
     const fetchData = async () => {
       setLoading(true)
       setError(null)
-      const [projectsRes, vendorsRes] = await Promise.all([
-        supabase.from('projects').select('id, name'),
-        supabase.from('vendors').select('id, name'),
-      ])
+      try {
+        const [projectsData, vendorsData] = await Promise.all([
+          dbFetch('projects', 'select', { select: 'id, name' }),
+          dbFetch('vendors', 'select', { select: 'id, name' }),
+        ])
 
-      if (projectsRes.error) setError(projectsRes.error.message)
-      else if (projectsRes.data) setProjects(projectsRes.data as Project[])
-
-      if (vendorsRes.error) setError(vendorsRes.error.message)
-      else if (vendorsRes.data) setVendors(vendorsRes.data as Vendor[])
-      
+        if (projectsData) setProjects(projectsData as Project[])
+        if (vendorsData) setVendors(vendorsData as Vendor[])
+      } catch (err: any) {
+        setError(err.message)
+      }
       setLoading(false)
     }
     fetchData()
@@ -65,28 +65,27 @@ export function VendorPurchasePage() {
       return
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        toast({ title: 'Error', description: 'You must be logged in to perform this action.', variant: 'destructive' })
-        return;
-    }
+    try {
+      const sessionRes = await fetch('/api/session')
+      const { user } = await sessionRes.json()
+      if (!user) {
+          toast({ title: 'Error', description: 'You must be logged in to perform this action.', variant: 'destructive' })
+          return;
+      }
 
-    const { error } = await supabase.from('project_vendor_purchases').insert([
-      {
-        project_id: selectedProject,
-        vendor_id: selectedVendor,
-        item_description: itemDescription,
-        quantity: parseInt(quantity),
-        unit,
-        rate: parseFloat(rate),
-        total_amount: totalAmount,
-        purchased_by: user.id,
-      },
-    ])
+      await dbFetch('project_vendor_purchases', 'insert', [
+        {
+          project_id: selectedProject,
+          vendor_id: selectedVendor,
+          item_description: itemDescription,
+          quantity: parseInt(quantity),
+          unit,
+          rate: parseFloat(rate),
+          total_amount: totalAmount,
+          purchased_by: user.id,
+        },
+      ])
 
-    if (error) {
-      toast({ title: 'Error recording purchase', description: error.message, variant: 'destructive' })
-    } else {
       toast({ title: 'Success', description: 'Vendor purchase has been recorded successfully.' })
       setSelectedProject('')
       setSelectedVendor('')
@@ -94,6 +93,8 @@ export function VendorPurchasePage() {
       setQuantity('')
       setUnit('')
       setRate('')
+    } catch (err: any) {
+      toast({ title: 'Error recording purchase', description: err.message, variant: 'destructive' })
     }
   }
   

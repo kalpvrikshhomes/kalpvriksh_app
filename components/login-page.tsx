@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { supabase } from '@/lib/supabase'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -25,27 +24,29 @@ export function LoginPage() {
     }
 
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      })
-      if (error) {
-        setError(error.message)
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
       } else {
-        setMessage('Please check your email for a confirmation link.')
-        window.location.reload()
+        setMessage('Registration successful! You can now log in.');
+        setIsSignUp(false);
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError(error.message)
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
       } else {
-        window.location.reload()
+        window.location.reload();
       }
     }
   }

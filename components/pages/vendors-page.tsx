@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbFetch } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -53,11 +53,13 @@ export function VendorsPage() {
   const fetchVendors = async () => {
     setLoading(true)
     setError(null)
-    const { data, error } = await supabase.from('vendors').select('*')
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      setVendors(data)
+    try {
+      const data = await dbFetch('vendors', 'select', {})
+      if (data) {
+        setVendors(data)
+      }
+    } catch (err: any) {
+      setError(err.message)
     }
     setLoading(false)
   }
@@ -72,32 +74,25 @@ export function VendorsPage() {
       phone: newVendor.phone || null,
     };
 
-    if (editingId) {
-      // Update existing vendor
-      const { error } = await supabase
-        .from('vendors')
-        .update(vendorData)
-        .eq('id', editingId);
-
-      if (error) {
-        setError(error.message);
-      } else {
+    try {
+      if (editingId) {
+        // Update existing vendor
+        await dbFetch('vendors', 'update', {
+          values: vendorData,
+          eq: { id: editingId }
+        });
         setVendors(vendors.map(v => v.id === editingId ? { ...v, ...vendorData, created_at: v.created_at } : v));
-      }
-    } else {
-      // Add new vendor
-      const { data, error } = await supabase
-        .from('vendors')
-        .insert([vendorData])
-        .select();
-
-      if (error) {
-        setError(error.message);
-      } else if (data && data.length > 0) {
-        setVendors(prevVendors => [...prevVendors, data[0]]);
       } else {
-        setError('Failed to add vendor: No data returned after insert.');
+        // Add new vendor
+        const data = await dbFetch('vendors', 'insert', [vendorData]);
+        if (data && data.length > 0) {
+          setVendors(prevVendors => [...prevVendors, data[0]]);
+        } else {
+          setError('Failed to add vendor: No data returned after insert.');
+        }
       }
+    } catch (err: any) {
+      setError(err.message);
     }
 
     setLoading(false);
@@ -118,11 +113,11 @@ export function VendorsPage() {
   const handleDelete = async (id: string) => {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.from('vendors').delete().eq('id', id);
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await dbFetch('vendors', 'delete', { eq: { id } });
       setVendors(vendors.filter(v => v.id !== id));
+    } catch (err: any) {
+      setError(err.message);
     }
     setLoading(false);
   };

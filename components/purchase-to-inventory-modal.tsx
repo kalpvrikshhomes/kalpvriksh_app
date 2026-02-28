@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { recordPurchase } from "@/lib/storage";
 import { type Material, type Vendor } from "@/lib/types";
-import { supabase } from "@/lib/supabase";
+import { dbFetch } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface PurchaseToInventoryModalProps {
@@ -48,11 +48,13 @@ export function PurchaseToInventoryModal({
 
   useEffect(() => {
     async function fetchVendors() {
-      const { data, error } = await supabase.from("vendors").select("id, name");
-      if (error) {
-        console.error("Error fetching vendors:", error);
-      } else {
-        setVendors(data as Vendor[]);
+      try {
+        const data = await dbFetch('vendors', 'select', { select: 'id, name' });
+        if (data) {
+          setVendors(data as Vendor[]);
+        }
+      } catch (err: any) {
+        console.error("Error fetching vendors:", err);
       }
     }
     if (open) {

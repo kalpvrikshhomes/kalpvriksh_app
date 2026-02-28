@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbFetch } from '@/lib/utils'
 import {
   Card,
   CardContent,
@@ -49,33 +49,19 @@ export function MaterialIssuePage({ user }: DashboardPageProps) {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-      const { data: inventoryData, error: inventoryError } = await supabase
-        .from('inventory_items')
-        .select('*')
-      const { data: vendorsData, error: vendorsError } = await supabase
-        .from('vendors')
-        .select('*')
+      try {
+        const [projectsData, inventoryData, vendorsData] = await Promise.all([
+          dbFetch('projects', 'select', {}),
+          dbFetch('inventory_items', 'select', {}),
+          dbFetch('vendors', 'select', {}),
+        ]);
 
-      if (projectsError) {
-        console.error('Error fetching projects:', projectsError)
-        toast.error('Error fetching projects.')
-      } else {
         setProjects(projectsData || [])
-      }
-      if (inventoryError) {
-        console.error('Error fetching inventory items:', inventoryError)
-        toast.error('Error fetching inventory items.')
-      } else {
         setInventoryItems(inventoryData || [])
-      }
-      if (vendorsError) {
-        console.error('Error fetching vendors:', vendorsError)
-        toast.error('Error fetching vendors.')
-      } else {
         setVendors(vendorsData || [])
+      } catch (err: any) {
+        console.error('Error fetching data:', err)
+        toast.error('Error fetching data.')
       }
       setLoading(false)
     }
@@ -138,12 +124,8 @@ export function MaterialIssuePage({ user }: DashboardPageProps) {
       }
     }
 
-    const { data, error } = await supabase.rpc('issue_materials', payload)
-
-    if (error) {
-      console.error('Error issuing materials:', error)
-      toast.error(error.message || 'Failed to issue materials.')
-    } else {
+    try {
+      await dbFetch('', 'rpc', { name: 'issue_materials', params: payload });
       toast.success('Materials issued successfully!')
       // Reset form after successful submission
       setFormData({
@@ -154,6 +136,9 @@ export function MaterialIssuePage({ user }: DashboardPageProps) {
         vendorId: '',
         paymentStatus: '',
       })
+    } catch (err: any) {
+      console.error('Error issuing materials:', err)
+      toast.error(err.message || 'Failed to issue materials.')
     }
     setSubmitting(false)
   }

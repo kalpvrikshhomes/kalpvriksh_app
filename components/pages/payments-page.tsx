@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbFetch } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -39,21 +39,19 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      const [workersRes, vendorsRes, projectsRes] = await Promise.all([ // Fetch projects
-        supabase.from('workers').select('id, name'),
-        supabase.from('vendors').select('id, name'),
-        supabase.from('projects').select('id, name'), // Fetch projects
-      ]);
+      try {
+        const [workersData, vendorsData, projectsData] = await Promise.all([
+          dbFetch('workers', 'select', { select: 'id, name' }),
+          dbFetch('vendors', 'select', { select: 'id, name' }),
+          dbFetch('projects', 'select', { select: 'id, name' }),
+        ]);
 
-      if (workersRes.error) setError(workersRes.error.message);
-      else if (workersRes.data) setWorkers(workersRes.data);
-
-      if (vendorsRes.error) setError(vendorsRes.error.message);
-      else if (vendorsRes.data) setVendors(vendorsRes.data);
-      
-      if (projectsRes.error) setError(projectsRes.error.message); // Check projectsRes
-      else if (projectsRes.data) setProjects(projectsRes.data); // Set projects
-      
+        if (workersData) setWorkers(workersData);
+        if (vendorsData) setVendors(vendorsData);
+        if (projectsData) setProjects(projectsData);
+      } catch (err: any) {
+        setError(err.message);
+      }
       setLoading(false);
     };
     fetchData();
@@ -70,23 +68,22 @@ export function PaymentsPage({ user }: PaymentsPageProps) {
       payee_type: payeeType,
       worker_id: payeeType === 'worker' ? selectedPayeeId : null,
       vendor_id: payeeType === 'vendor' ? selectedPayeeId : null,
-      project_id: selectedProjectId || null, // Change to project_id
+      project_id: selectedProjectId || null,
       amount: parseFloat(amount),
       notes,
       paid_by: user.id,
     };
 
-    const { error } = await supabase.from('payments').insert([paymentData]);
-
-    if (error) {
-      toast({ title: 'Error Recording Payment', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await dbFetch('payments', 'insert', [paymentData]);
       toast({ title: 'Success', description: 'Payment has been recorded successfully.' });
       setPayeeType('');
       setSelectedPayeeId('');
-      setSelectedProjectId(''); // Reset selectedProjectId
+      setSelectedProjectId('');
       setAmount('');
       setNotes('');
+    } catch (err: any) {
+      toast({ title: 'Error Recording Payment', description: err.message, variant: 'destructive' });
     }
   };
 

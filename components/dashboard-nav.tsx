@@ -29,6 +29,7 @@ export function DashboardNav({
     { id: 'inventory', label: 'Inventory', icon: '📦' },
     { id: 'customers', label: 'Customers', icon: '👥' },
     { id: 'projects', label: 'Projects', icon: '🎯' },
+    { id: 'visualizations', label: '3D Visualizations', icon: '🎨' },
     { id: 'vendors', label: 'Vendors', icon: '🚚' },
     { id: 'workers', label: 'Workers', icon: '🛠️' },
     { id: 'materialIssue', label: 'Material Issue', icon: '📤' },

@@ -22,15 +22,17 @@ export function CustomersPage({ user }: DashboardPageProps) {
     address: '',
     created_at: '',
   })
+  const [filterName, setFilterName] = useState('')
+  const [filterAddress, setFilterAddress] = useState('')
 
   const fetchCustomers = async () => {
-    const customers = await getCustomers()
+    const customers = await getCustomers(filterName, filterAddress)
     setCustomers(customers)
   }
 
   useEffect(() => {
     fetchCustomers()
-  }, [])
+  }, [filterName, filterAddress]) // Re-fetch customers when filters change
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,6 +126,22 @@ export function CustomersPage({ user }: DashboardPageProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Filter Inputs */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <Input
+          placeholder="Filter by Name"
+          value={filterName}
+          onChange={(e) => setFilterName(e.target.value)}
+          className="bg-input border-border text-foreground flex-1"
+        />
+        <Input
+          placeholder="Filter by Address"
+          value={filterAddress}
+          onChange={(e) => setFilterAddress(e.target.value)}
+          className="bg-input border-border text-foreground flex-1"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {customers.map((customer) => (

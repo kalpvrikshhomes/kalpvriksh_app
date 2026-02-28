@@ -5,6 +5,7 @@ import { OverviewPage } from './pages/overview-page'
 import { InventoryPage } from './pages/inventory-page'
 import { CustomersPage } from './pages/customers-page'
 import { ProjectsPage } from './pages/projects-page'
+import { VisualizationsPage } from './pages/visualizations-page'
 import { LogsPage } from './pages/logs-page'
 import { VendorsPage } from './pages/vendors-page'
 import { WorkersPage } from './pages/workers-page'
@@ -28,6 +29,8 @@ export function DashboardContent({ user, currentPage }: DashboardContentProps) {
         return <CustomersPage user={user} />
       case 'projects':
         return <ProjectsPage user={user} />
+      case 'visualizations':
+        return <VisualizationsPage />
       case 'vendors':
         return <VendorsPage />
       case 'workers':
