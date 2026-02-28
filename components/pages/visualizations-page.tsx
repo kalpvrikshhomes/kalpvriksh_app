@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { dbFetch } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input' 
+import { useToast } from '@/hooks/use-toast'
 
 type VisualizationCategory = {
   id: string;
