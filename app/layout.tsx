@@ -11,11 +11,7 @@ export const metadata: Metadata = {
   description: 'Professional inventory and project management system for interior design companies',
   generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon.png',
-      },
-    ],
+    icon: '/icon.png',
     apple: '/apple-icon.png',
   },
 }
@@ -27,6 +23,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/icon.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+      </head>
       <link rel="manifest" href="/manifest.json" />
       <meta name="theme-color" content="#0f172a" />
       <body className={inter.className}>
