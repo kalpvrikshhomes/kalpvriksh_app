@@ -7,10 +7,17 @@ const nextConfig = {
   },
   images: {
     // Enabled optimization for better performance in production
+    localPatterns: [
+      {
+        pathname: '/api/proxy-image',
+        search: '?**',
+      },
+    ],
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'atzrfldrqyvjyuvnhkvb.supabase.co',
+        pathname: '/storage/v1/object/public/**',
       },
     ],
   },
