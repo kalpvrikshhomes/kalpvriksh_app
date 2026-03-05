@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { dbFetch, getProxyImageUrl } from '@/lib/utils'
+import { dbFetch, getProxyImageUrl, extractStoragePath } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import Image from 'next/image'
 import { ClipLoader } from 'react-spinners'
@@ -143,15 +143,22 @@ export function ProjectsPage({ user }: DashboardPageProps) {
     try {
       // 1. Delete marked gallery images
       if (imagesToDelete.length > 0) {
-        const paths = imagesToDelete.map(img => {
-          const parts = img.split('/');
-          return parts.slice(-3).join('/'); // project_id/gallery/filename
-        });
-        await fetch('/api/storage', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bucket: 'project-images', paths })
-        });
+        const pathsByBucket: Record<string, string[]> = {}
+        imagesToDelete.forEach(img => {
+          const extracted = extractStoragePath(img)
+          if (extracted) {
+            if (!pathsByBucket[extracted.bucket]) pathsByBucket[extracted.bucket] = []
+            pathsByBucket[extracted.bucket].push(extracted.path)
+          }
+        })
+
+        for (const bucket in pathsByBucket) {
+          await fetch('/api/storage', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bucket, paths: pathsByBucket[bucket] })
+          })
+        }
 
         await dbFetch('project_images', 'delete', { in: { image_path: imagesToDelete } });
       }
@@ -180,13 +187,14 @@ export function ProjectsPage({ user }: DashboardPageProps) {
         const filePath = `${selectedProject.id}/cover/${file.name}`
         
         if (publishFormData.existing_cover_image_path) {
-          const parts = publishFormData.existing_cover_image_path.split('/');
-          const oldPath = parts.slice(-3).join('/');
-          await fetch('/api/storage', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bucket: 'project-images', paths: [oldPath] })
-          });
+          const extracted = extractStoragePath(publishFormData.existing_cover_image_path)
+          if (extracted) {
+            await fetch('/api/storage', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bucket: extracted.bucket, paths: [extracted.path] })
+            });
+          }
         }
 
         const formData = new FormData()
@@ -228,27 +236,35 @@ export function ProjectsPage({ user }: DashboardPageProps) {
       const galleryImages = await dbFetch('project_images', 'select', { eq: { project_id: selectedProject.id } })
       
       if (galleryImages && galleryImages.length > 0) {
-        const paths = galleryImages.map((img: any) => {
-          const parts = img.image_path.split('/');
-          return parts.slice(-3).join('/');
+        const pathsByBucket: Record<string, string[]> = {}
+        galleryImages.forEach((img: any) => {
+          const extracted = extractStoragePath(img.image_path)
+          if (extracted) {
+            if (!pathsByBucket[extracted.bucket]) pathsByBucket[extracted.bucket] = []
+            pathsByBucket[extracted.bucket].push(extracted.path)
+          }
         })
-        await fetch('/api/storage', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bucket: 'project-images', paths })
-        });
+
+        for (const bucket in pathsByBucket) {
+          await fetch('/api/storage', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bucket, paths: pathsByBucket[bucket] })
+          })
+        }
         await dbFetch('project_images', 'delete', { eq: { project_id: selectedProject.id } })
       }
 
       // Delete cover image from storage
       if (publishFormData.existing_cover_image_path) {
-        const parts = publishFormData.existing_cover_image_path.split('/');
-        const path = parts.slice(-3).join('/');
-        await fetch('/api/storage', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bucket: 'project-images', paths: [path] })
-        });
+        const extracted = extractStoragePath(publishFormData.existing_cover_image_path)
+        if (extracted) {
+          await fetch('/api/storage', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bucket: extracted.bucket, paths: [extracted.path] })
+          });
+        }
       }
       
       // Delete the profile card record

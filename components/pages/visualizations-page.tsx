@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { dbFetch, getProxyImageUrl } from '@/lib/utils'
+import { dbFetch, getProxyImageUrl, extractStoragePath } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -196,12 +196,12 @@ export function VisualizationsPage() {
     if (window.confirm(`Are you sure you want to delete the visualization "${visualization.title}"?`)) {
       try {
         // First, delete the image from storage
-        const imagePath = visualization.image_url.split('/3d-visualizations/')[1]
-        if(imagePath){
+        const extracted = extractStoragePath(visualization.image_url)
+        if (extracted) {
           await fetch('/api/storage', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bucket: '3d-visualizations', paths: [imagePath] })
+            body: JSON.stringify({ bucket: extracted.bucket, paths: [extracted.path] })
           });
         }
 

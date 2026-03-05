@@ -1,7 +1,7 @@
-
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { supabaseServer as supabase } from '@/lib/supabaseServer'
 
 export async function POST(request: Request) {
   try {
@@ -12,11 +12,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    
     // Verify user
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
     if (authError || !user) {
@@ -44,9 +39,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path)
+    // Instead of direct public URL, return the path and proxy URL
+    const relativePath = `${bucket}/${path}`;
+    const proxyUrl = `/api/proxy-image?path=${encodeURIComponent(relativePath)}`;
 
-    return NextResponse.json({ data: { ...data, publicUrl } })
+    return NextResponse.json({ 
+        data: { 
+            ...data, 
+            path: relativePath,
+            proxyUrl: proxyUrl,
+            publicUrl: proxyUrl // For backward compatibility with existing code
+        } 
+    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'An error occurred' }, { status: 500 })
   }
@@ -61,11 +65,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    
     // Verify user
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
     if (authError || !user) {
