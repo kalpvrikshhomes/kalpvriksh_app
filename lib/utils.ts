@@ -8,7 +8,18 @@ export function cn(...inputs: ClassValue[]) {
 export function getProxyImageUrl(pathOrUrl: string | null | undefined): string {
   if (!pathOrUrl) return '/placeholder.svg'
   
-  // If it's already a proxied URL, return it
+  // If it's a "broken" proxy URL (missing ?) fix it
+  if (pathOrUrl.startsWith('/api/proxy-image') && !pathOrUrl.includes('?')) {
+    const parts = pathOrUrl.split('/api/proxy-image')
+    if (parts.length > 1) {
+      const rest = parts[1]
+      if (rest.startsWith('path=')) return `/api/proxy-image?${rest}`
+      if (rest.startsWith('url=')) return `/api/proxy-image?${rest}`
+      return `/api/proxy-image?path=${encodeURIComponent(rest)}`
+    }
+  }
+
+  // If it's already a correctly proxied URL, return it
   if (pathOrUrl.startsWith('/api/proxy-image')) {
     return pathOrUrl
   }

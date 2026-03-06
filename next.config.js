@@ -9,8 +9,7 @@ const nextConfig = {
     // Enabled optimization for better performance in production
     localPatterns: [
       {
-        pathname: '/api/proxy-image',
-        search: '?**',
+        pathname: '/**',
       },
     ],
     remotePatterns: [
